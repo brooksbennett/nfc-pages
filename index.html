@@ -195,7 +195,9 @@
   // Config (friendly names + gestures inferred from your YAML)
   const CONFIG = {
     keys: {
-      0: { name:"Paddle / Main", friendly:"Main Relay", tracks:"switch.living_room_lamp", actions:[], led:{} },
+      0: { name:"Paddle / Main", friendly:"Main Relay", tracks:"switch.living_room_lamp", actions:[
+        { type:"single", icon:"single", label:"Toggle Living Room Lamp", domain:"switch", entity:"switch.living_room_lamp" }
+      ], led:{} },
       1: { name:"Key 1", friendly:"Master Bedroom Light", tracks:"switch.master_bedroom_light", actions:[
             { type:"single", icon:"single", label:"Toggle Master Bedroom Light", domain:"switch", entity:"switch.master_bedroom_light" }
           ], led:{ off_color:"2", off_brightness:"2", on_brightness:"0" } },
