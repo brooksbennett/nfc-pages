@@ -1,0 +1,190 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Civic Bingo</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    .tile { transition: box-shadow 160ms, border-color 160ms; }
+    .tile.on { box-shadow: 0 0 0 4px rgba(16,185,129,.4); }
+    .tile.win { border-color: rgb(5 150 105); }
+    .tile.blank { pointer-events: none; color: rgb(148 163 184); background: rgb(241 245 249); }
+  </style>
+</head>
+<body class="min-h-screen bg-slate-50 text-slate-900 p-6">
+  <div class="max-w-6xl mx-auto grid gap-6 md:grid-cols-2">
+    <section class="space-y-4">
+      <h1 class="text-3xl font-bold">Civic Bingo</h1>
+      <p class="text-sm opacity-80">Review/edit the terms, then generate a randomized bingo board. Click tiles as phrases are mentioned. A full row or column wins. (Optional diagonals / free center.)</p>
+
+      <div class="grid gap-2">
+        <label class="text-sm font-medium">Terms (one per line, comma, or semicolon)</label>
+        <textarea id="terms" class="w-full h-56 p-3 rounded-2xl border bg-white shadow-sm"></textarea>
+        <div class="flex flex-wrap items-center gap-3">
+          <div class="flex items-center gap-2">
+            <label class="text-sm">Grid</label>
+            <select id="grid" class="px-3 py-2 rounded-2xl border bg-white shadow-sm">
+              <option value="3">3 × 3</option>
+              <option value="4">4 × 4</option>
+              <option value="5" selected>5 × 5</option>
+            </select>
+          </div>
+          <label class="flex items-center gap-2 text-sm">
+            <input id="diagonals" type="checkbox" /> Count diagonals
+          </label>
+          <label class="flex items-center gap-2 text-sm">
+            <input id="freecenter" type="checkbox" /> Free center (odd grids)
+          </label>
+        </div>
+        <div class="flex items-center gap-3">
+          <button id="generate" class="px-4 py-2 rounded-2xl bg-emerald-600 text-white shadow">Generate Board</button>
+          <button id="reshuffle" class="px-4 py-2 rounded-2xl bg-slate-200 text-slate-900 shadow">Reshuffle</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="space-y-4">
+      <header class="flex items-center justify-between">
+        <h2 class="text-2xl font-semibold">Board</h2>
+        <span id="status" class="hidden px-3 py-1 rounded-full bg-emerald-100 text-emerald-800 text-sm font-semibold">Bingo! You have a winning line</span>
+      </header>
+      <div id="board" class="grid gap-2"></div>
+      <p id="emptynote" class="hidden text-xs opacity-70">Not enough unique terms to fill the grid; blank tiles are disabled. Add more items and click <strong>Generate Board</strong>.</p>
+      <div class="text-xs opacity-60">Tip: Each page load shuffles the board for that user. Use <em>Reshuffle</em> for a new layout without reloading.</div>
+    </section>
+  </div>
+
+  <footer class="mt-10 text-center text-xs opacity-60">Single-file edition for GitHub Pages.</footer>
+
+  <script>
+  const DEFAULT_TERMS = [
+    "Complains about DEI",
+    "Enforce camping ban",
+    "Complains about security",
+    "Sweetgreen",
+    "Lifeguards",
+    "Animal issue",
+    "We don't need (vital service)",
+    "Mental health",
+    "I'm in danger",
+    "Someone yells",
+    '"Do your job"',
+    "Israel Palestine",
+    "Process complaint",
+    '"Just remove waste"',
+    "Police budget too small",
+    '"Look at me"',
+    "ISD issue",
+    "Sassy mayor",
+    "Current candidate for office",
+    "Odd analogy",
+    "MAGA hat",
+    '"You work for us"',
+    "Brings a prop",
+    "Hyper specific problem",
+    "Fire",
+  ];
+
+  // --- DOM refs
+  const termsEl = document.getElementById('terms');
+  const gridEl = document.getElementById('grid');
+  const diagonalsEl = document.getElementById('diagonals');
+  const freeEl = document.getElementById('freecenter');
+  const boardEl = document.getElementById('board');
+  const statusEl = document.getElementById('status');
+  const emptyNote = document.getElementById('emptynote');
+  const genBtn = document.getElementById('generate');
+  const reshuffleBtn = document.getElementById('reshuffle');
+
+  // --- Util
+  function shuffle(a){ a=[...a]; for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]];} return a; }
+  function uniqNonEmpty(words){ const seen=new Set(); const out=[]; for(const w of words.map(s=>s.trim()).filter(Boolean)){ const k=w.toLowerCase(); if(!seen.has(k)){ seen.add(k); out.push(w);} } return out; }
+  function parseTerms(text){ return uniqNonEmpty(text.split(/\n|,|;|\u2022|\u2023|\u25E6|\u2043|\u2219/g).map(s=>s.replace(/[\"\u201C\u201D]/g,'"'))); }
+
+  // --- State
+  let cells=[], selected=[], winLines=[];
+
+  function savePrefs(){
+    try{ localStorage.setItem('civic-bingo-onefile', JSON.stringify({
+      termsText: termsEl.value, gridSize: +gridEl.value, diagonals: diagonalsEl.checked, free: freeEl.checked
+    })); }catch{}
+  }
+  function loadPrefs(){
+    try{ const raw=localStorage.getItem('civic-bingo-onefile'); if(!raw) return; const s=JSON.parse(raw);
+      if(typeof s.termsText==='string') termsEl.value=s.termsText;
+      if(typeof s.gridSize==='number') gridEl.value=String(s.gridSize);
+      if(typeof s.diagonals==='boolean') diagonalsEl.checked=s.diagonals;
+      if(typeof s.free==='boolean') freeEl.checked=s.free;
+    }catch{}
+  }
+
+  function buildBoard(terms){
+    const n = +gridEl.value; const need = n*n;
+    const src = terms.slice(0, need); while(src.length<need) src.push('');
+    cells = shuffle(src);
+    selected = Array(need).fill(false);
+    winLines = [];
+
+    // free center
+    if(freeEl.checked && (n%2===1)){
+      selected[Math.floor(need/2)] = true;
+    }
+
+    boardEl.style.gridTemplateColumns = `repeat(${n}, minmax(0, 1fr))`;
+    boardEl.innerHTML='';
+    cells.forEach((label, i)=>{
+      const btn=document.createElement('button');
+      btn.className = 'tile relative h-28 p-2 rounded-2xl border border-slate-200 shadow-sm bg-white text-sm leading-snug';
+      if(!label){ btn.classList.add('blank'); }
+      btn.title = label || '(blank)';
+      btn.innerHTML = `<div class="absolute top-2 right-2 text-xs opacity-60">${Math.floor(i/n)+1}-${(i%n)+1}</div><div class="whitespace-pre-wrap text-center">${label||'(blank)'}</div>`;
+      btn.addEventListener('click', ()=> toggle(i, btn));
+      boardEl.appendChild(btn);
+    });
+
+    updateWins();
+    emptyNote.classList.toggle('hidden', !cells.some(c=>!c));
+  }
+
+  function toggle(i, btn){
+    if(!cells[i]) return;
+    selected[i] = !selected[i];
+    btn.classList.toggle('on', selected[i]);
+    updateWins();
+  }
+
+  function updateWins(){
+    const n = +gridEl.value; const lines=[];
+    // rows
+    for(let r=0;r<n;r++){ const idxs=[...Array(n)].map((_,c)=>r*n+c); if(idxs.every(i=>selected[i])) lines.push(idxs); }
+    // cols
+    for(let c=0;c<n;c++){ const idxs=[...Array(n)].map((_,r)=>r*n+c); if(idxs.every(i=>selected[i])) lines.push(idxs); }
+    // diagonals
+    if(diagonalsEl.checked){
+      const d1=[...Array(n)].map((_,i)=>i*n+i);
+      const d2=[...Array(n)].map((_,i)=>i*n+(n-1-i));
+      if(d1.every(i=>selected[i])) lines.push(d1);
+      if(d2.every(i=>selected[i])) lines.push(d2);
+    }
+    winLines = lines;
+
+    // update UI highlight
+    [...boardEl.children].forEach((el, i)=> el.classList.toggle('win', lines.some(line=>line.includes(i))));
+    statusEl.classList.toggle('hidden', lines.length===0);
+  }
+
+  // --- Wiring
+  genBtn.addEventListener('click', ()=>{ const parsed=parseTerms(termsEl.value); buildBoard(parsed); savePrefs(); });
+  reshuffleBtn.addEventListener('click', ()=>{ const parsed=parseTerms(termsEl.value); buildBoard(parsed); });
+  gridEl.addEventListener('change', ()=> savePrefs());
+  diagonalsEl.addEventListener('change', ()=>{ savePrefs(); updateWins(); });
+  freeEl.addEventListener('change', ()=>{ savePrefs(); const parsed=parseTerms(termsEl.value); buildBoard(parsed); });
+
+  // Init
+  termsEl.value = DEFAULT_TERMS.join('\n');
+  loadPrefs();
+  buildBoard(parseTerms(termsEl.value));
+  </script>
+</body>
+</html>
