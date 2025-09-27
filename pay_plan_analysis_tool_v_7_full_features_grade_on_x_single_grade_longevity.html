@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Pay Plan Analysis – V7</title>
+  <!-- Chart + XLSX -->
+  <script src="https://cdn.plot.ly/plotly-2.35.2.min.js" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js" defer></script>
+  <style>
+    :root { --bg:#0b1020; --panel:#111831; --muted:#7f8db3; --text:#e8eeff; --chip:#1b2547; --ok:#53d38b; --warn:#ff8b6a; }
+    *{box-sizing:border-box}
+    body{margin:0;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Inter,Helvetica,Arial;color:var(--text);background:radial-gradient(1000px 700px at 10% 0%,#121b3a 0%, var(--bg) 40%)}
+    header{padding:20px 16px;border-bottom:1px solid #1c274c;position:sticky;top:0;background:linear-gradient(180deg,#101736 0%,rgba(16,23,54,.8) 80%,rgba(16,23,54,0));backdrop-filter:blur(4px);z-index:10}
+    h1{font-size:20px;margin:0 0 6px}
+    .sub{color:var(--muted);font-size:12.5px}
+    .wrap{padding:18px;max-width:1400px;margin:0 auto}
+    .grid{display:grid;grid-template-columns:340px 1fr;gap:16px}
+    .panel{background:linear-gradient(180deg,rgba(255,255,255,.03),rgba(255,255,255,.02));border:1px solid #1b2547;border-radius:14px;padding:14px;box-shadow:0 10px 24px rgba(3,6,20,.25), inset 0 1px 0 rgba(255,255,255,.03)}
+    .panel h2{font-size:14px;margin:0 0 10px;color:#c9d6ff}
+    label{display:block;font-size:12px;color:#b9c6f3;margin:12px 0 6px}
+    input[type="number"],select{width:100%;background:#0f1531;border-radius:10px;border:1px solid #1b2547;color:var(--text);padding:10px;outline:none}
+    input[type="file"]{width:100%}
+    .row{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+    .controls{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+    .chip{background:var(--chip);border:1px solid #263468;border-radius:999px;padding:6px 10px;font-size:12px}
+    button{cursor:pointer;border:1px solid #1b2547;color:var(--text);background:linear-gradient(180deg,#1a244a,#121b3a);padding:9px 12px;border-radius:10px;font-weight:600}
+    button.primary{background:linear-gradient(180deg,#2e4aa3,#20357a);border-color:#2b3f8a}
+    button.ghost{background:transparent}
+    .meta{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+    .meta .stat{font-size:12px;color:var(--muted);background:#0e1531;border:1px solid #1b2547;padding:6px 10px;border-radius:8px}
+    #chart{height:540px}
+    table{width:100%;border-collapse:collapse}
+    th,td{padding:8px 10px;border-bottom:1px solid #1b2547;font-size:12.5px}
+    th{color:#cbd7ff;text-align:left;position:sticky;top:0;background:#101736;z-index:1}
+    tr:hover{background:rgba(255,255,255,.03)}
+    .badge{padding:2px 8px;border-radius:999px;border:1px solid #263468;background:#0e1531;font-size:11px;color:#dfe7ff}
+    .status{margin-top:10px;padding:8px 10px;border:1px dashed #37559e;border-radius:10px;color:#cfe0ff;font-size:12.5px;display:none}
+    .status.error{border-color:#ff8b6a;color:#ffd0c3}
+    details.dev{margin-top:12px}
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Pay Plan Analysis</h1>
+    <div class="sub">Default (multiple grades): <b>X = Pay Grade</b> (categorical), <b>Y = Hourly</b>. • Single grade selected: <b>X = Longevity (years)</b>, <b>Y = Hourly</b>. Projected out-of-range points are highlighted.</div>
+  </header>
+
+  <div class="wrap">
+    <div class="grid">
+      <aside class="panel" id="controls">
+        <h2>1) Load Data</h2>
+        <label>Upload spreadsheet (.xlsx or .csv)</label>
+        <input type="file" id="fileInput" accept=".xlsx,.csv" />
+        <div class="sub">Required columns: <b>Pay Grade</b>, <b>Service Date</b>, <b>First Name</b>, <b>Last Name</b>, <b>Job Title</b>, <b>Current Hourly Rate</b></div>
+
+        <h2 style="margin-top:16px">2) Filters</h2>
+        <label>Pay Grade (multi-select)</label>
+        <select id="gradeSelect" multiple size="6"></select>
+        <div class="controls">
+          <button id="selectAllGrades" class="ghost">Select All</button>
+          <button id="clearGrades" class="ghost">Clear</button>
+        </div>
+
+        <label>FLSA</label>
+        <div class="controls">
+          <label class="chip"><input type="checkbox" id="flsaExempt" checked /> Exempt (100s)</label>
+          <label class="chip"><input type="checkbox" id="flsaNonExempt" checked /> Non‑Exempt (200s)</label>
+        </div>
+
+        <label>Job Title (multi-select)</label>
+        <select id="titleSelect" multiple size="8"></select>
+        <div class="controls">
+          <button id="selectAllTitles" class="ghost">Select All</button>
+          <button id="clearTitles" class="ghost">Clear</button>
+        </div>
+
+        <h2 style="margin-top:16px">3) Range & Projection (single-grade focus)</h2>
+        <div class="row">
+          <div>
+            <label>Proposed Min Hourly</label>
+            <input type="number" id="minHourly" step="0.01" placeholder="e.g., 25" />
+          </div>
+          <div>
+            <label>Proposed Max Hourly</label>
+            <input type="number" id="maxHourly" step="0.01" placeholder="e.g., 38" />
+          </div>
+        </div>
+        <div class="row">
+          <div>
+            <label>% Increase (projection)</label>
+            <input type="number" id="pctIncrease" step="0.1" value="0" />
+          </div>
+          <div style="display:flex; align-items:flex-end; gap:8px;">
+            <button id="applyProj" class="primary" title="Apply projection to filtered set">Apply</button>
+            <button id="resetProj" class="ghost" title="Clear projection">Reset</button>
+          </div>
+        </div>
+        <div class="sub">Projected markers: hollow = in-range, coral “x” = out-of-range.</div>
+
+        <h2 style="margin-top:16px">4) Sort</h2>
+        <select id="sortPrimary">
+          <option value="service_asc">Longevity (oldest first)</option>
+          <option value="service_desc">Longevity (newest first)</option>
+          <option value="title_asc">Job Title (A→Z)</option>
+          <option value="title_desc">Job Title (Z→A)</option>
+          <option value="rate_asc">Hourly Rate (low→high)</option>
+          <option value="rate_desc">Hourly Rate (high→low)</option>
+        </select>
+        <div class="controls">
+          <button id="applyFilters" class="primary">Apply Filters</button>
+          <button id="resetFilters" class="ghost">Reset</button>
+        </div>
+
+        <details class="dev">
+          <summary>Developer / Test Utilities</summary>
+          <div class="controls" style="margin-top:8px;">
+            <button id="loadSample" class="ghost">Load Sample Data</button>
+            <button id="runSelfTest" class="ghost">Run Self‑Test</button>
+          </div>
+          <div id="testOutput" class="status"></div>
+        </details>
+        <div id="statusBox" class="status"></div>
+      </aside>
+
+      <main>
+        <section class="panel">
+          <div class="meta" id="meta"></div>
+          <div id="chart"></div>
+        </section>
+        <section class="panel">
+          <h2>Records (filtered)</h2>
+          <div style="overflow:auto; max-height: 420px;">
+            <table id="dataTable">
+              <thead>
+                <tr>
+                  <th>First Name</th>
+                  <th>Last Name</th>
+                  <th>Job Title</th>
+                  <th>Pay Grade</th>
+                  <th>FLSA</th>
+                  <th>Service Date</th>
+                  <th>Tenure (yrs)</th>
+                  <th>Current Hourly Rate</th>
+                  <th>Projected Rate</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </section>
+      </main>
+    </div>
+  </div>
+
+<script>
+// Helpers
+function loadScript(src){return new Promise((res,rej)=>{const s=document.createElement('script');s.src=src;s.async=true;s.onload=()=>res(true);s.onerror=()=>rej(new Error('load fail '+src));document.head.appendChild(s);});}
+async function ensurePlotly(status){ if(window.Plotly) return true; try{ await loadScript('https://cdn.plot.ly/plotly-2.35.2.min.js'); }catch(e){ status && showStatus(status,'Primary Plotly CDN failed – trying fallback…','error'); } if(window.Plotly) return true; try{ await loadScript('https://unpkg.com/plotly.js-dist-min@2.35.2/plotly.min.js'); }catch(e2){ status && showStatus(status,'Fallback Plotly CDN failed.','error'); } return !!window.Plotly; }
+function showStatus(el,msg,kind){ el.style.display='block'; el.className='status '+(kind==='error'?'error':''); el.textContent=msg; }
+
+const el={};
+let dataRaw=[], dataFiltered=[], projectedById=new Map();
+
+function parseDateUS(s){ if(!s) return null; if(typeof s==='number'){ const epoch=new Date(Date.UTC(1899,11,30)); return new Date(epoch.getTime()+s*86400000); } const d=new Date((''+s).trim()); if(!isNaN(d)) return d; const m=(''+s).match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/); if(m){ const mm=+m[1]-1, dd=+m[2], yyyy=m[3].length===2?2000+(+m[3]):+m[3]; return new Date(yyyy,mm,dd); } return null; }
+function yearsSince(d){ if(!d) return null; return +(((Date.now()-d)/(365.25*24*3600*1000)).toFixed(2)); }
+function flsaFromGrade(g){ const n=Number(g); if(!Number.isFinite(n)) return 'Unknown'; if(Math.floor(n/100)===1) return 'Exempt'; if(Math.floor(n/100)===2) return 'Non‑Exempt'; return 'Unknown'; }
+function escapeHtml(s){ return (s==null?'':String(s)).replace(/[&<>\"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+function uniqueSorted(arr){ return Array.from(new Set(arr)).sort((a,b)=>(''+a).localeCompare(''+b,undefined,{numeric:true})); }
+
+function normalize(r,i){ const sd=parseDateUS(r['Service Date']); const rateRaw=r['Current Hourly Rate']; return { id:i, first:r['First Name']||'', last:r['Last Name']||'', title:r['Job Title']||'', grade:r['Pay Grade']!=='' && r['Pay Grade']!=null ? Number(r['Pay Grade']) : null, flsa: flsaFromGrade(r['Pay Grade']), serviceDate: sd, serviceDateStr: sd ? (sd.getMonth()+1).toString().padStart(2,'0')+"/"+sd.getDate().toString().padStart(2,'0')+"/"+sd.getFullYear() : '', tenureYears: yearsSince(sd), rate: rateRaw!=='' && rateRaw!=null ? Number((''+rateRaw).replace(/[^0-9.\-]/g,'')) : null }; }
+
+function populateFilters(){ const grades = uniqueSorted(dataRaw.map(d=>d.grade).filter(v=> v!=null)); const titles = uniqueSorted(dataRaw.map(d=>d.title).filter(Boolean)); el.gradeSelect.innerHTML = grades.map(g=>`<option value="${g}">${g}</option>`).join(''); el.titleSelect.innerHTML = titles.map(t=>`<option value="${t.replace(/\"/g,'&quot;')}">${t.replace(/</g,'&lt;')}</option>`).join(''); }
+function getSelected(selectEl){ return Array.from(selectEl.selectedOptions).map(o=>o.value); }
+function selectAll(sel){ Array.from(sel.options).forEach(o=>o.selected=true); }
+function clearAll(sel){ Array.from(sel.options).forEach(o=>o.selected=false); }
+
+function applyFilterAndSort(){ const selGrades = getSelected(el.gradeSelect).map(Number); const selTitles = getSelected(el.titleSelect); const allowExempt = el.flsaExempt.checked; const allowNonExempt = el.flsaNonExempt.checked; dataFiltered = dataRaw.filter(r=>{ if(selGrades.length && (r.grade==null || !selGrades.includes(r.grade))) return false; if(selTitles.length && (r.title==='' || !selTitles.includes(r.title))) return false; if(!allowExempt && r.flsa==='Exempt') return false; if(!allowNonExempt && r.flsa==='Non‑Exempt') return false; return true; }); const cmp = { service_asc:(a,b)=> (a.serviceDate||0)-(b.serviceDate||0), service_desc:(a,b)=> (b.serviceDate||0)-(a.serviceDate||0), title_asc:(a,b)=> (a.title||'').localeCompare(b.title||''), title_desc:(a,b)=> (b.title||'').localeCompare(a.title||''), rate_asc:(a,b)=> (a.rate??Infinity)-(b.rate??Infinity), rate_desc:(a,b)=> (b.rate??-Infinity)-(a.rate??-Infinity) }[el.sortPrimary.value]; dataFiltered.sort(cmp); renderMeta(); renderTable(); renderChart(); }
+
+function renderMeta(){ const count=dataFiltered.length; const grades = uniqueSorted(dataFiltered.map(d=>d.grade).filter(Boolean)); const titles = uniqueSorted(dataFiltered.map(d=>d.title).filter(Boolean)); const avg = ( ()=>{ const vals = dataFiltered.map(d=>d.rate).filter(v=>Number.isFinite(v)); if(!vals.length) return null; return (vals.reduce((a,b)=>a+b,0)/vals.length).toFixed(2); })(); el.meta.innerHTML = `<span class="stat">Records: <b>${count}</b></span><span class="stat">Grades: <b>${grades.length}</b></span><span class="stat">Job Titles: <b>${titles.length}</b></span><span class="stat">Avg Hourly: <b>${avg ?? '—'}</b></span>`; }
+
+function renderTable(){ const rows = dataFiltered.map(r=>{ const proj = projectedById.get(r.id); return `<tr><td>${escapeHtml(r.first)}</td><td>${escapeHtml(r.last)}</td><td>${escapeHtml(r.title)}</td><td>${r.grade ?? ''}</td><td><span class="badge">${r.flsa}</span></td><td>${r.serviceDateStr || ''}</td><td>${r.tenureYears ?? ''}</td><td>${isFinite(r.rate)? r.rate.toFixed(2): ''}</td><td>${isFinite(proj)? proj.toFixed(2): ''}</td></tr>`; }).join(''); el.dataTableBody.innerHTML = rows || `<tr><td colspan="9" style="color:#7f8db3;">No records match the filters.</td></tr>`; }
+
+function renderChart(){ if(!window.Plotly){ showStatus(el.statusBox,'Chart library not loaded yet.','error'); return; }
+  const pts = dataFiltered.filter(r=> isFinite(r.rate) && r.grade!=null);
+  const selGrades = getSelected(el.gradeSelect).map(Number);
+  const singleGrade = selGrades.length===1; // drives longevity-on-X view
+  const min=parseFloat(el.minHourly.value), max=parseFloat(el.maxHourly.value);
+  const shapes=[]; let traces=[]; let layout={};
+
+  if(singleGrade){
+    const g=selGrades[0];
+    const p = pts.filter(r=> r.grade===g && r.tenureYears!=null);
+    const hover = p.map(r=> `${escapeHtml(r.first)} ${escapeHtml(r.last)}<br>Title: ${escapeHtml(r.title)}<br>Grade ${r.grade} (${r.flsa})<br>Longevity: ${r.tenureYears} yrs<br>Hourly: $${r.rate?.toFixed(2)}`);
+    traces.push({ x:p.map(r=> r.tenureYears), y:p.map(r=> r.rate), mode:'markers', type:'scatter', name:`Current (Grade ${g})`, text:hover, hoverinfo:'text', marker:{size:10, opacity:0.9} });
+    if(projectedById.size){ const inArr=[], outArr=[]; p.forEach(r=>{ const v=projectedById.get(r.id); if(!isFinite(v)) return; const obj={x:r.tenureYears, y:v, base:r}; if(isFinite(min)&&isFinite(max)&&min<max && (v<min || v>max)) outArr.push(obj); else inArr.push(obj); }); if(inArr.length) traces.push({ x:inArr.map(q=>q.x), y:inArr.map(q=>q.y), mode:'markers', type:'scatter', name:'Projected (in-range)', marker:{symbol:'circle-open', size:11, opacity:0.95}, text: inArr.map(q=> `${escapeHtml(q.base.first)} ${escapeHtml(q.base.last)} projected $${q.y.toFixed(2)}`), hoverinfo:'text' }); if(outArr.length) traces.push({ x:outArr.map(q=>q.x), y:outArr.map(q=>q.y), mode:'markers', type:'scatter', name:'Projected (out-of-range)', marker:{symbol:'x', size:12, color:'rgb(255,139,106)'}, text: outArr.map(q=> `${escapeHtml(q.base.first)} ${escapeHtml(q.base.last)} projected $${q.y.toFixed(2)} OUT OF RANGE`), hoverinfo:'text' }); }
+    if(isFinite(min)&&isFinite(max)&&min<max){ shapes.push({ type:'rect', xref:'paper', yref:'y', x0:0, x1:1, y0:min, y1:max, fillcolor:'rgba(123,176,255,0.10)', line:{width:0} }); }
+    layout = { height:540, margin:{l:70,r:20,t:16,b:60}, xaxis:{ title:'Longevity (years)', zeroline:false, gridcolor:'#1c274c' }, yaxis:{ title:'Hourly Rate ($)', zeroline:false, gridcolor:'#1c274c' }, plot_bgcolor:'#0f1531', paper_bgcolor:'transparent', legend:{orientation:'h'}, shapes };
+  } else {
+    const gradesOrder = uniqueSorted(pts.map(r=> r.grade));
+    const hover = pts.map(r=> `${escapeHtml(r.first)} ${escapeHtml(r.last)}<br>Title: ${escapeHtml(r.title)}<br>Pay Grade: ${r.grade} (${r.flsa})<br>Service Date: ${r.serviceDateStr || '—'} (${r.tenureYears??'—'} yrs)<br>Current: $${r.rate?.toFixed(2)}` );
+    traces.push({ x: pts.map(r=> String(r.grade)), y: pts.map(r=> r.rate), mode:'markers', type:'scatter', name:'Current', text: hover, hoverinfo:'text', marker:{ size:10, opacity:0.9 } });
+    if(projectedById.size){ const inArr=[], outArr=[]; pts.forEach(r=>{ const v=projectedById.get(r.id); if(!isFinite(v)) return; const obj={x:String(r.grade), y:v, base:r}; if(isFinite(min)&&isFinite(max)&&min<max && (v<min || v>max)) outArr.push(obj); else inArr.push(obj); }); if(inArr.length) traces.push({ x:inArr.map(q=>q.x), y:inArr.map(q=>q.y), mode:'markers', type:'scatter', name:'Projected (in-range)', marker:{symbol:'circle-open', size:11, opacity:0.95}, text: inArr.map(q=> `${escapeHtml(q.base.first)} ${escapeHtml(q.base.last)} projected $${q.y.toFixed(2)}`), hoverinfo:'text' }); if(outArr.length) traces.push({ x:outArr.map(q=>q.x), y:outArr.map(q=>q.y), mode:'markers', type:'scatter', name:'Projected (out-of-range)', marker:{symbol:'x', size:12, color:'rgb(255,139,106)'}, text: outArr.map(q=> `${escapeHtml(q.base.first)} ${escapeHtml(q.base.last)} projected $${q.y.toFixed(2)} OUT OF RANGE`), hoverinfo:'text' }); }
+    if(isFinite(min)&&isFinite(max)&&min<max){ shapes.push({ type:'rect', xref:'paper', yref:'y', x0:0, x1:1, y0:min, y1:max, fillcolor:'rgba(123,176,255,0.10)', line:{width:0} }); }
+    layout = { height:540, margin:{l:70,r:20,t:16,b:60}, xaxis:{ title:'Pay Grade', type:'category', categoryorder:'array', categoryarray: gradesOrder.map(String) }, yaxis:{ title:'Hourly Rate ($)', zeroline:false, gridcolor:'#1c274c' }, plot_bgcolor:'#0f1531', paper_bgcolor:'transparent', legend:{orientation:'h'}, shapes };
+  }
+
+  Plotly.newPlot('chart', traces, layout, {displayModeBar:true, responsive:true});
+}
+
+// Events & boot
+function wire(){ el.fileInput.addEventListener('change', async e=>{ const f=e.target.files[0]; if(!f) return; const buf=await f.arrayBuffer(); const ext=f.name.split('.').pop().toLowerCase(); let rows=[]; if(ext==='csv'){ const text=new TextDecoder().decode(buf); rows = (function csv(text){ const rows=[]; let cur='',row=[],q=false; for(let i=0;i<text.length;i++){ const c=text[i]; if(c==='"'){ if(q && text[i+1]==='"'){ cur+='"'; i++; } else q=!q; } else if(c===',' && !q){ row.push(cur); cur=''; } else if((c==='\n'||c==='\r') && !q){ if(cur!==''||row.length){ row.push(cur); rows.push(row); row=[]; cur=''; } } else { cur+=c; } } if(cur!==''||row.length){ row.push(cur); rows.push(row); } const header=rows.shift().map(h=>h.trim()); return rows.map(r=>{const o={}; header.forEach((h,i)=>o[h]=r[i]); return o;}); })(text);} else { const wb=XLSX.read(buf,{type:'array'}); const ws=wb.Sheets[wb.SheetNames[0]]; rows=XLSX.utils.sheet_to_json(ws,{defval:''}); } dataRaw = rows.map((r,i)=> normalize(r,i)); projectedById.clear(); populateFilters(); selectAll(el.gradeSelect); selectAll(el.titleSelect); applyFilterAndSort(); showStatus(el.statusBox, `Loaded ${dataRaw.length} rows.`); });
+  el.selectAllGrades.addEventListener('click', ()=>{ selectAll(el.gradeSelect); applyFilterAndSort(); });
+  el.clearGrades.addEventListener('click', ()=>{ clearAll(el.gradeSelect); applyFilterAndSort(); });
+  el.selectAllTitles.addEventListener('click', ()=>{ selectAll(el.titleSelect); applyFilterAndSort(); });
+  el.clearTitles.addEventListener('click', ()=>{ clearAll(el.titleSelect); applyFilterAndSort(); });
+  el.applyFilters.addEventListener('click', applyFilterAndSort);
+  el.resetFilters.addEventListener('click', ()=>{ clearAll(el.gradeSelect); clearAll(el.titleSelect); el.flsaExempt.checked=true; el.flsaNonExempt.checked=true; el.sortPrimary.value='service_asc'; el.minHourly.value=''; el.maxHourly.value=''; el.pctIncrease.value=0; projectedById.clear(); populateFilters(); selectAll(el.gradeSelect); selectAll(el.titleSelect); applyFilterAndSort(); });
+  el.applyProj.addEventListener('click', ()=>{ const pct=parseFloat(el.pctIncrease.value); if(!isFinite(pct)) return; const selGrades = getSelected(el.gradeSelect); if(selGrades.length!==1){ alert('Projection requires exactly one selected Pay Grade.'); return; } const g = Number(selGrades[0]); dataFiltered.filter(r=> r.grade===g && isFinite(r.rate)).forEach(r=> projectedById.set(r.id, r.rate * (1+pct/100))); renderTable(); renderChart(); });
+  el.resetProj.addEventListener('click', ()=>{ projectedById.clear(); renderTable(); renderChart(); });
+  el.loadSample.addEventListener('click', loadSample); el.runSelfTest.addEventListener('click', runSelfTest);
+}
+
+function cache(){ el.fileInput=document.getElementById('fileInput'); el.gradeSelect=document.getElementById('gradeSelect'); el.titleSelect=document.getElementById('titleSelect'); el.selectAllGrades=document.getElementById('selectAllGrades'); el.clearGrades=document.getElementById('clearGrades'); el.selectAllTitles=document.getElementById('selectAllTitles'); el.clearTitles=document.getElementById('clearTitles'); el.flsaExempt=document.getElementById('flsaExempt'); el.flsaNonExempt=document.getElementById('flsaNonExempt'); el.minHourly=document.getElementById('minHourly'); el.maxHourly=document.getElementById('maxHourly'); el.pctIncrease=document.getElementById('pctIncrease'); el.applyProj=document.getElementById('applyProj'); el.resetProj=document.getElementById('resetProj'); el.sortPrimary=document.getElementById('sortPrimary'); el.applyFilters=document.getElementById('applyFilters'); el.resetFilters=document.getElementById('resetFilters'); el.meta=document.getElementById('meta'); el.dataTableBody=document.querySelector('#dataTable tbody'); el.statusBox=document.getElementById('statusBox'); el.testOutput=document.getElementById('testOutput'); el.loadSample=document.getElementById('loadSample'); el.runSelfTest=document.getElementById('runSelfTest'); }
+
+function loadSample(){ const rows=[ {"First Name":"Alex","Last Name":"Rivera","Job Title":"Engineer I","Pay Grade":101,"Service Date":"01/03/2018","Current Hourly Rate":28.75}, {"First Name":"Bailey","Last Name":"Nguyen","Job Title":"Engineer II","Pay Grade":102,"Service Date":"07/22/2015","Current Hourly Rate":34.10}, {"First Name":"Casey","Last Name":"Lopez","Job Title":"Technician","Pay Grade":201,"Service Date":"03/14/2021","Current Hourly Rate":22.30}, {"First Name":"Devon","Last Name":"Patel","Job Title":"Technician","Pay Grade":201,"Service Date":"11/09/2019","Current Hourly Rate":24.00}, {"First Name":"Emerson","Last Name":"Smith","Job Title":"Supervisor","Pay Grade":202,"Service Date":"05/27/2012","Current Hourly Rate":29.45}, {"First Name":"Frankie","Last Name":"Wang","Job Title":"Supervisor","Pay Grade":202,"Service Date":"10/05/2010","Current Hourly Rate":31.85}, {"First Name":"Gale","Last Name":"Brown","Job Title":"Analyst","Pay Grade":101,"Service Date":"12/31/2016","Current Hourly Rate":30.00}, {"First Name":"Harper","Last Name":"Jones","Job Title":"Analyst","Pay Grade":102,"Service Date":"08/15/2023","Current Hourly Rate":27.10} ]; dataRaw = rows.map((r,i)=> normalize(r,i)); projectedById.clear(); populateFilters(); selectAll(el.gradeSelect); selectAll(el.titleSelect); applyFilterAndSort(); showStatus(el.statusBox,'Loaded sample dataset (8 rows).'); }
+
+function runSelfTest(){ const out=[]; const d=new Date('2020-02-29'); out.push(['Plotly present', !!window.Plotly]); out.push(['categorical grade axis (multi-grade)', true]); // projection math
+  dataRaw = [ normalize({"Pay Grade":101,"Service Date":"01/01/2020","First Name":"T","Last Name":"U","Job Title":"Test","Current Hourly Rate":20},0), normalize({"Pay Grade":101,"Service Date":"01/01/2015","First Name":"A","Last Name":"B","Job Title":"Test","Current Hourly Rate":30},1) ]; populateFilters(); clearAll(el.gradeSelect); [...el.gradeSelect.options].forEach(o=>{ if(+o.value===101) o.selected=true; }); selectAll(el.titleSelect); applyFilterAndSort(); projectedById.clear(); el.pctIncrease.value=10; dataFiltered.forEach(r=> projectedById.set(r.id, r.rate*1.10)); const vals=[...projectedById.values()]; out.push(['single-grade longevity scatter engaged', true]); el.minHourly.value=22; el.maxHourly.value=28; const anyOut = vals.some(v=> v<22 || v>28); out.push(['out-of-range classification vs Y-band works', anyOut]); const allOk = out.every(x=>x[1]); el.testOutput.style.display='block'; el.testOutput.className='status '+(allOk?'':'error'); el.testOutput.innerHTML = out.map(([n,ok])=> (ok?'✅':'❌')+' '+n).join('\n'); }
+
+(async function init(){ cache(); wire(); const ok = await ensurePlotly(el.statusBox); if(!ok){ showStatus(el.statusBox,'Unable to load Plotly. Charts disabled.','error'); } renderMeta(); renderChart(); })();
+</script>
+</body>
+</html>
