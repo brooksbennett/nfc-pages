@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Office Buttons</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+
+    <!-- Custom Styles -->
+    <style>
+        .arrow-bottom {
+            position: relative;
+        }
+        /* Mobile touch improvements for tooltips */
+        .touch-tooltip:active .tooltip-content,
+        .touch-tooltip:focus-within .tooltip-content {
+            opacity: 1;
+            pointer-events: auto;
+        }
+    </style>
+</head>
+<body class="min-h-screen bg-gray-50 text-slate-800 font-sans selection:bg-blue-100">
+
+    <!-- Header Section -->
+    <header class="bg-white shadow-sm sticky top-0 z-10 border-b border-gray-100">
+        <div class="max-w-4xl mx-auto px-4 py-4 flex justify-between items-center">
+            <div class="flex items-center space-x-3">
+                <div class="bg-blue-600 p-2 rounded-lg text-white">
+                    <i data-lucide="home" width="20" height="20"></i>
+                </div>
+                <div>
+                    <h1 class="text-lg font-bold leading-tight text-slate-900">Office Buttons</h1>
+                    <p class="text-xs text-slate-500 font-medium">ESPHome Controller Guide</p>
+                </div>
+            </div>
+            
+            <!-- View Toggle -->
+            <div class="flex bg-gray-100 p-1 rounded-lg">
+                <button onclick="switchTab('grid')" id="tab-grid" class="px-3 py-1.5 text-xs font-semibold rounded-md transition-all bg-white text-blue-600 shadow-sm">
+                    Grid
+                </button>
+                <button onclick="switchTab('list')" id="tab-list" class="px-3 py-1.5 text-xs font-semibold rounded-md transition-all text-gray-500 hover:text-gray-700">
+                    List
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <main class="max-w-4xl mx-auto px-4 py-6">
+        
+        <!-- Intro Card -->
+        <div class="bg-blue-50 border border-blue-100 rounded-xl p-4 mb-8 flex items-start gap-3">
+            <div class="text-blue-600 shrink-0 mt-0.5">
+                <i data-lucide="info" width="20" height="20"></i>
+            </div>
+            <div class="text-sm text-blue-800">
+                <p class="font-semibold mb-1">How to use</p>
+                <p>Tap a button on the visual guide below to see detailed actions. The physical buttons support both <strong>Short Press</strong> (Tap) and <strong>Long Press</strong> (Hold 0.5s+).</p>
+            </div>
+        </div>
+
+        <!-- GRID VIEW -->
+        <div id="grid-view" class="grid grid-cols-3 gap-3 sm:gap-6 max-w-md mx-auto">
+            <!-- Content injected by JS -->
+        </div>
+
+        <!-- LIST VIEW -->
+        <div id="list-view" class="hidden space-y-3">
+            <!-- Content injected by JS -->
+        </div>
+
+    </main>
+
+    <script>
+        // --- Data Configuration ---
+        const buttons = [
+            {
+                id: 1,
+                color: 'white',
+                label: 'Btn 1',
+                icon: 'power',
+                shortPress: { action: 'Toggle Office Light', icon: 'lightbulb' },
+                longPress: { action: 'Toggle Office Light', icon: 'lightbulb' },
+            },
+            {
+                id: 2,
+                color: 'white',
+                label: 'Btn 2',
+                icon: 'lightbulb',
+                shortPress: { action: 'Toggle Desk Lamp', icon: 'lightbulb' },
+                longPress: { action: 'Toggle Office Light', icon: 'power' },
+            },
+            {
+                id: 3,
+                color: 'white',
+                label: 'Btn 3',
+                icon: 'volume-2',
+                shortPress: { action: 'Announce "Who Farted?" + Power Price', icon: 'volume-2' },
+                longPress: { action: 'Toggle Office Light', icon: 'power' },
+            },
+            {
+                id: 4,
+                color: 'green',
+                label: 'Btn 4',
+                icon: 'zap',
+                shortPress: { action: 'LEDs On (Random Fade)', icon: 'zap' },
+                longPress: { action: 'LEDs Off', icon: 'power' },
+            },
+            {
+                id: 5,
+                color: 'blue',
+                label: 'Btn 5',
+                icon: 'lightbulb',
+                shortPress: { action: 'Toggle Desk Lamp', icon: 'lightbulb' },
+                longPress: { action: 'Toggle Office Light', icon: 'power' },
+            },
+            {
+                id: 6,
+                color: 'black',
+                label: 'Btn 6',
+                icon: 'music',
+                shortPress: { action: 'Spotify Next Track', icon: 'skip-forward' },
+                longPress: { action: 'Spotify Play/Pause', icon: 'play' },
+            },
+            {
+                id: 7,
+                color: 'yellow',
+                label: 'Btn 7',
+                icon: 'lightbulb',
+                shortPress: { action: 'Toggle Desk Lamp', icon: 'lightbulb' },
+                longPress: { action: 'Toggle Office Light', icon: 'power' },
+            },
+            {
+                id: 8,
+                color: 'red',
+                label: 'Btn 8',
+                icon: 'alert-circle',
+                shortPress: { action: 'Toggle Desk Lamp', icon: 'lightbulb' },
+                longPress: { action: 'Toggle Bedroom Alarm', icon: 'bell' },
+            },
+            {
+                id: 9,
+                color: 'white',
+                label: 'Btn 9',
+                icon: 'skip-back',
+                shortPress: { action: 'Spotify Prev Track', icon: 'skip-back' },
+                longPress: { action: 'Toggle Office Light', icon: 'power' },
+            },
+        ];
+
+        // --- Helper Functions ---
+        function getColorClasses(color) {
+            switch (color) {
+                case 'white': return 'bg-gray-100 text-gray-800 border-gray-300 hover:bg-gray-200';
+                case 'green': return 'bg-green-500 text-white border-green-600 hover:bg-green-600';
+                case 'blue': return 'bg-blue-500 text-white border-blue-600 hover:bg-blue-600';
+                case 'black': return 'bg-gray-900 text-white border-black hover:bg-gray-800';
+                case 'yellow': return 'bg-yellow-400 text-yellow-900 border-yellow-500 hover:bg-yellow-500';
+                case 'red': return 'bg-red-600 text-white border-red-700 hover:bg-red-700';
+                default: return 'bg-gray-100 text-gray-800';
+            }
+        }
+
+        function getLabelClasses(color) {
+            const base = "text-[10px] px-1.5 py-0.5 rounded uppercase font-bold tracking-wider border";
+            switch (color) {
+                case 'white': return `${base} bg-gray-100 text-gray-500 border-gray-200`;
+                case 'black': return `${base} bg-gray-100 text-gray-900 border-gray-200`;
+                default: return `${base} bg-${color}-50 text-${color}-700 border-${color}-100`;
+            }
+        }
+
+        // --- Render Functions ---
+        function renderGrid() {
+            const container = document.getElementById('grid-view');
+            container.innerHTML = buttons.map(btn => `
+                <div class="group touch-tooltip relative outline-none" tabindex="0">
+                    <div class="aspect-square rounded-2xl shadow-sm border-b-4 active:border-b-0 active:translate-y-1 transition-all duration-150 flex flex-col items-center justify-center p-2 text-center cursor-pointer ${getColorClasses(btn.color)}">
+                        <div class="mb-1 opacity-90">
+                            <i data-lucide="${btn.icon}" width="24" height="24"></i>
+                        </div>
+                        <span class="text-[10px] uppercase font-bold tracking-wider opacity-75">${btn.label}</span>
+                    </div>
+
+                    <!-- Tooltip -->
+                    <div class="tooltip-content absolute opacity-0 group-hover:opacity-100 transition-opacity z-20 bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 pointer-events-none">
+                        <div class="bg-slate-800 text-white text-xs rounded-lg p-3 shadow-xl arrow-bottom">
+                            <div class="flex items-center gap-2 mb-2 border-b border-slate-700 pb-2">
+                                <span class="font-bold text-slate-300">Tap</span>
+                                <span class="flex-1">${btn.shortPress.action}</span>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <span class="font-bold text-slate-300">Hold</span>
+                                <span class="flex-1">${btn.longPress.action}</span>
+                            </div>
+                        </div>
+                        <!-- CSS Arrow -->
+                        <div class="w-3 h-3 bg-slate-800 rotate-45 absolute left-1/2 -translate-x-1/2 -bottom-1"></div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function renderList() {
+            const container = document.getElementById('list-view');
+            container.innerHTML = buttons.map(btn => `
+                <div class="bg-white rounded-xl p-4 shadow-sm border border-gray-100 flex items-center gap-4">
+                    <div class="w-12 h-12 shrink-0 rounded-xl shadow-sm border-b-2 flex items-center justify-center ${getColorClasses(btn.color)}">
+                        <i data-lucide="${btn.icon}" width="24" height="24"></i>
+                    </div>
+
+                    <div class="flex-1 min-w-0">
+                        <div class="flex items-center gap-2 mb-1">
+                            <h3 class="font-bold text-slate-700 text-sm">Button ${btn.id}</h3>
+                            <span class="${getLabelClasses(btn.color)}">${btn.color}</span>
+                        </div>
+
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-y-2 gap-x-4 text-sm">
+                            <div class="flex items-center gap-2 text-slate-600">
+                                <span class="bg-slate-100 text-slate-500 text-[10px] font-bold px-1.5 rounded">TAP</span>
+                                <span class="truncate">${btn.shortPress.action}</span>
+                            </div>
+                            <div class="flex items-center gap-2 text-slate-600">
+                                <span class="bg-slate-100 text-slate-500 text-[10px] font-bold px-1.5 rounded">HOLD</span>
+                                <span class="truncate">${btn.longPress.action}</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // --- Logic ---
+        function switchTab(tab) {
+            const gridView = document.getElementById('grid-view');
+            const listView = document.getElementById('list-view');
+            const gridBtn = document.getElementById('tab-grid');
+            const listBtn = document.getElementById('tab-list');
+
+            if (tab === 'grid') {
+                gridView.classList.remove('hidden');
+                listView.classList.add('hidden');
+                
+                gridBtn.classList.add('bg-white', 'text-blue-600', 'shadow-sm');
+                gridBtn.classList.remove('text-gray-500', 'hover:text-gray-700');
+                
+                listBtn.classList.remove('bg-white', 'text-blue-600', 'shadow-sm');
+                listBtn.classList.add('text-gray-500', 'hover:text-gray-700');
+            } else {
+                gridView.classList.add('hidden');
+                listView.classList.remove('hidden');
+                
+                listBtn.classList.add('bg-white', 'text-blue-600', 'shadow-sm');
+                listBtn.classList.remove('text-gray-500', 'hover:text-gray-700');
+                
+                gridBtn.classList.remove('bg-white', 'text-blue-600', 'shadow-sm');
+                gridBtn.classList.add('text-gray-500', 'hover:text-gray-700');
+            }
+        }
+
+        // --- Initialization ---
+        document.addEventListener('DOMContentLoaded', () => {
+            renderGrid();
+            renderList();
+            lucide.createIcons();
+        });
+    </script>
+</body>
+</html>
