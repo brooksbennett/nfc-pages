@@ -1,327 +1,278 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <title>ZEN32 – Scene Controller (Near Bedroom)</title>
-  <style>
-    /* Brighter aurora background */
-    :root{
-      --bg1:#f4f7ff; --bg2:#eef3ff;
-      --aur1:#22d3ee; --aur2:#c4b5fd; --aur3:#86efac;
-      --text:#0b1220; --muted:#475569; --accent:#0369a1;
-      --card:#ffffff; --panel:#f4f6fb; --line:#e5e7eb;
-    }
-    @media (prefers-color-scheme: dark){
-      :root{--bg1:#0d1222; --bg2:#0a0f1d; --aur1:#0ea5e9; --aur2:#a78bfa; --aur3:#22c55e; --text:#e6edf3; --muted:#98a2b3; --accent:#60a5fa; --card:#101622; --panel:#0f1620; --line:#263040}
-    }
-    html { -webkit-text-size-adjust: 100%; }
-    body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
-    button, [role="button"], .key, .paddle { -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Near Bedroom Control</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- React & ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    
+    <!-- Babel for JSX -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
-    *{box-sizing:border-box}
-    html,body{height:100%}
-    body{
-      margin:0; color:var(--text); font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,Noto Sans,Helvetica,Arial,sans-serif; line-height:1.45;
-      background:
-        radial-gradient(1100px 700px at 10% 15%, var(--aur1) 0%, transparent 38%),
-        radial-gradient(900px 600px at 85% 10%, var(--aur2) 0%, transparent 40%),
-        radial-gradient(800px 700px at 20% 90%, var(--aur3) 0%, transparent 36%),
-        linear-gradient(160deg, var(--bg1), var(--bg2) 60%);
-      padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
-    }
-
-    .wrap{max-width:1120px;margin:0 auto;padding:16px clamp(16px,3vw,28px)}
-
-    header{position:sticky;top:0;z-index:10;backdrop-filter:saturate(180%) blur(8px);background:color-mix(in srgb, var(--card) 85%, transparent);border:1px solid var(--line);border-radius:16px;display:flex;gap:12px;align-items:center;justify-content:space-between;padding:10px 12px;margin-bottom:18px}
-    h1{font-size:clamp(20px,4.5vw,28px);margin:0}
-    .actions{display:flex;gap:10px;flex-wrap:wrap}
-    button{background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:12px;padding:10px 14px;font-weight:600;cursor:pointer;min-height:44px;min-width:44px}
-    button.secondary{background:transparent}
-    button:focus{outline:2px solid var(--accent);outline-offset:2px}
-
-    main{display:grid;grid-template-columns:360px 1fr;gap:18px}
-    @media (max-width:980px){main{grid-template-columns:1fr}}
-
-    .card{background:var(--card);border:1px solid var(--line);border-radius:16px;box-shadow:0 8px 24px rgba(0,0,0,.08);overflow:hidden}
-    .card h2{font-size:18px;margin:0;padding:14px 16px;border-bottom:1px solid var(--line)}
-    .card .content{padding:14px 16px}
-
-    /* --- ZEN32 mock (2:1 device aspect, paddle on top) --- */
-    .deviceWrap{display:flex;justify-content:center;padding:18px}
-    .device{width:min(340px,92vw);max-width:420px;aspect-ratio:2/1; /* <-- true 2:1 */
-      background:var(--panel);border:1px solid var(--line);border-radius:22px;box-shadow:inset 0 1px 0 rgba(255,255,255,.5), 0 10px 24px rgba(2,6,23,.12);
-      padding:14px;position:relative;display:grid}
-
-    /* Use fractional rows so proportions hold at any size */
-    .plate{display:grid;grid-template-rows:1fr 0.68fr 0.68fr;gap:10px;height:100%}
-    @media (max-width:420px){ .plate{grid-template-rows:0.92fr 0.62fr 0.62fr;gap:8px} }
-
-    .paddle{min-height:0;background:linear-gradient(180deg,#ffffff66,#ffffff00), var(--card);border:1px solid var(--line);border-radius:14px;display:flex;align-items:center;justify-content:center;position:relative;cursor:pointer}
-    .paddle .label{position:absolute;top:8px;left:10px;font-size:12px;color:var(--muted)}
-
-    .row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-    .key{min-height:0;background:linear-gradient(180deg,#ffffff55,#ffffff00), var(--card);border:1px solid var(--line);border-radius:14px;display:flex;align-items:center;justify-content:center;position:relative;cursor:pointer}
-    .key .label{position:absolute;top:8px;left:10px;font-size:12px;color:var(--muted)}
-    .key .led{position:absolute;top:10px;right:10px;width:12px;height:12px;border-radius:50%;box-shadow:0 0 0 1px var(--line),0 0 10px currentColor}
-
-    .active{outline:2px solid var(--accent);outline-offset:2px}
-
-    /* Details */
-    .details{display:grid;gap:12px}
-    .box{border:1px dashed var(--line);border-radius:12px;padding:12px}
-    .box h3{margin:0 0 8px 0;font-size:15px}
-    .kv{display:grid;grid-template-columns:170px minmax(0,1fr);gap:6px 10px;font-size:14px}
-    .kv>div{min-width:0;overflow-wrap:anywhere}
-    .chips{display:flex;flex-wrap:wrap;gap:8px}
-    .chip{display:inline-flex;align-items:center;gap:6px;background:#f8fafc;border:1px solid var(--line);border-radius:999px;padding:6px 10px;font-size:12px}
-    code{background:#f1f5f9;padding:2px 6px;border-radius:6px}
-    .muted{color:var(--muted)}
-    .list{display:grid;gap:8px}
-    .list-item{border:1px solid var(--line);border-radius:10px;padding:10px}
-    .list-item .t{font-weight:600;display:flex;align-items:center;gap:8px}
-
-    .colorGrid{display:flex;flex-wrap:wrap;gap:8px}
-    .swatch{display:flex;align-items:center;gap:8px;border:1px solid var(--line);border-radius:10px;padding:6px 10px;font-size:12px}
-    .dot{width:12px;height:12px;border-radius:50%;box-shadow:0 0 0 1px var(--line),0 0 10px currentColor}
-  </style>
+    <style>
+        /* Hide scrollbar for clean UI */
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .no-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+    </style>
 </head>
-<body>
-  <div class="wrap">
-    <header>
-      <div>
-        <h1>Scene Controller – Near Bedroom (ZEN32)</h1>
-      </div>
-      <div class="actions">
-        <button id="printBtn" class="primary" title="Print or Save as PDF">Print / PDF</button>
-        <button id="toggleLayout" class="secondary" title="Switch panel/list order">Toggle View</button>
-      </div>
-    </header>
+<body class="bg-slate-50 text-slate-900">
+    <div id="root"></div>
 
-    <main>
-      <section class="card" aria-label="Switch layout">
-        <h2>Switch Layout</h2>
-        <div class="content deviceWrap">
-          <div class="device">
-            <div class="plate">
-              <div class="paddle" data-key="0" tabindex="0" role="button" aria-label="Paddle / Main">
-                <span class="label">Paddle / Main</span>
-                ⎋
-              </div>
-              <div class="row">
-                <div class="key" data-key="1" tabindex="0" role="button" aria-label="Key 1 – Master Bedroom Light">
-                  <span class="label">Key 1</span>
-                  ①
-                  <span class="led" id="led-1"></span>
+    <script type="text/babel">
+        const { useState } = React;
+
+        // --- ICON COMPONENTS (Inline SVGs to avoid complex build steps) ---
+        const IconWrapper = ({ children, size = 24, className = "" }) => (
+            <svg 
+                xmlns="http://www.w3.org/2000/svg" 
+                width={size} 
+                height={size} 
+                viewBox="0 0 24 24" 
+                fill="none" 
+                stroke="currentColor" 
+                strokeWidth="2" 
+                strokeLinecap="round" 
+                strokeLinejoin="round" 
+                className={className}
+            >
+                {children}
+            </svg>
+        );
+
+        const Lamp = (props) => (
+            <IconWrapper {...props}>
+                <path d="M8 2h8l4 10H4L8 2Z" /><path d="M12 12v6" /><path d="M8 22v-2c0-1.1.9-2 2-2h4a2 2 0 0 1 2 2v2H8Z" />
+            </IconWrapper>
+        );
+        const BedDouble = (props) => (
+            <IconWrapper {...props}>
+                <path d="M2 20v-8a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v8" /><path d="M4 10V6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v4" /><path d="M12 4v6" /><path d="M2 18h20" />
+            </IconWrapper>
+        );
+        const Lightbulb = (props) => (
+            <IconWrapper {...props}>
+                <path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-1 1.5-2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5" /><path d="M9 18h6" /><path d="M10 22h4" />
+            </IconWrapper>
+        );
+        const Fingerprint = (props) => (
+            <IconWrapper {...props}>
+                <path d="M2 12C2 6.5 6.5 2 12 2a10 10 0 0 1 8 6" /><path d="M5 16a6 6 0 0 1 6-6c.9 0 1.8.2 2.5.5" /><path d="M7 21a6 6 0 0 1 6-6c3.6 0 6.6 2 9 6" /><path d="M16 22a2 2 0 0 0 2-2" /><path d="M20 22a2 2 0 0 0 2-2" /><path d="M22 18a2 2 0 0 0-2-2" /><path d="M12 22a2 2 0 0 0 2-2" /><path d="M8 22a2 2 0 0 0 2-2" />
+            </IconWrapper>
+        );
+        const TreePine = (props) => (
+            <IconWrapper {...props}>
+                <path d="m17 14 3 3.3a1 1 0 0 1-.7 1.7H4.7a1 1 0 0 1-.7-1.7L7 14h-.3a1 1 0 0 1-.9-1.5l2.9-4H8.3a1 1 0 0 1-.9-1.5l4.5-5a1 1 0 0 1 1.5 0l4.5 5a1 1 0 0 1-.9 1.5h-.4l2.9 4h-.3a1 1 0 0 1-.9 1.5H17Z" /><path d="M12 22v-3" />
+            </IconWrapper>
+        );
+        const MoreHorizontal = (props) => (
+            <IconWrapper {...props}>
+                <circle cx="12" cy="12" r="1" /><circle cx="19" cy="12" r="1" /><circle cx="5" cy="12" r="1" />
+            </IconWrapper>
+        );
+        const Sofa = (props) => (
+            <IconWrapper {...props}>
+                <path d="M20 9V7a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v2" /><path d="M2 11v5a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-5a2 2 0 0 0-4 0v2H6v-2a2 2 0 0 0-4 0Z" /><path d="M4 18v2" /><path d="M20 18v2" /><path d="M12 4v9" />
+            </IconWrapper>
+        );
+        const Info = (props) => (
+            <IconWrapper {...props}>
+                <circle cx="12" cy="12" r="10" /><path d="M12 16v-4" /><path d="M12 8h.01" />
+            </IconWrapper>
+        );
+        const MousePointer2 = (props) => (
+            <IconWrapper {...props}>
+                <path d="m12 6 6 6-6 6" /><path d="M22 12H2" />
+            </IconWrapper>
+        );
+
+        // --- MAIN APP COMPONENT ---
+        const SwitchGuide = () => {
+            const buttons = [
+                {
+                    id: 'main',
+                    label: 'Main Light',
+                    subLabel: 'Living Room Lamp',
+                    icon: Lamp,
+                    colorClass: 'bg-slate-200 text-slate-600',
+                    ledColor: 'White',
+                    instructions: [
+                        { type: 'tap', label: 'Single Tap', action: 'Toggle Living Room Lamp', icon: MousePointer2 },
+                    ]
+                },
+                {
+                    id: 'scene1',
+                    label: 'Master Bed',
+                    subLabel: 'Bedroom Light',
+                    icon: BedDouble,
+                    colorClass: 'bg-emerald-100 text-emerald-700 border-emerald-200',
+                    ledColor: 'Green',
+                    instructions: [
+                        { type: 'tap', label: 'Single Tap', action: 'Toggle Master Bedroom Light', icon: MousePointer2 },
+                    ]
+                },
+                {
+                    id: 'scene2',
+                    label: 'Recessed',
+                    subLabel: 'Living Room Overhead',
+                    icon: Lightbulb,
+                    colorClass: 'bg-blue-100 text-blue-700 border-blue-200',
+                    ledColor: 'Blue',
+                    instructions: [
+                        { type: 'tap', label: 'Single Tap', action: 'Turn ON Recessed Lights', icon: MousePointer2 },
+                        { type: 'hold', label: 'Hold (Wait)', action: 'Turn OFF Recessed Lights', icon: Fingerprint },
+                    ]
+                },
+                {
+                    id: 'scene3',
+                    label: 'Christmas',
+                    subLabel: 'Tree & Holiday',
+                    icon: TreePine,
+                    colorClass: 'bg-purple-100 text-purple-700 border-purple-200',
+                    ledColor: 'Magenta',
+                    instructions: [
+                        { type: 'tap', label: 'Single Tap', action: 'Turn ON Christmas Mode', icon: MousePointer2 },
+                        { type: 'double', label: 'Double Tap', action: 'Turn OFF Christmas Mode', icon: MoreHorizontal },
+                    ]
+                },
+                {
+                    id: 'scene4',
+                    label: 'Living Area',
+                    subLabel: 'Zone Control',
+                    icon: Sofa,
+                    colorClass: 'bg-amber-100 text-amber-700 border-amber-200',
+                    ledColor: 'Yellow',
+                    instructions: [
+                        { type: 'tap', label: 'Single Tap', action: 'Toggle Living Room Main Lights', icon: MousePointer2 },
+                        { type: 'double', label: 'Double Tap', action: 'All OFF (Fan, Lamps, Overhead)', icon: MoreHorizontal },
+                    ]
+                }
+            ];
+
+            const [selectedId, setSelectedId] = useState(null);
+            const selectedButton = buttons.find(b => b.id === selectedId);
+
+            return (
+                <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6 font-sans">
+                    <div className="w-full max-w-md bg-white rounded-3xl shadow-xl overflow-hidden border border-slate-100 flex flex-col max-h-[90vh]">
+                        
+                        {/* Header */}
+                        <div className="bg-slate-900 text-white p-6 pb-8 relative shrink-0">
+                            <div className="absolute top-0 right-0 -mr-4 -mt-4 w-24 h-24 bg-white opacity-5 rounded-full blur-2xl"></div>
+                            <div className="relative z-10">
+                                <h2 className="text-xs font-bold tracking-widest text-blue-400 uppercase mb-1">Device Guide</h2>
+                                <h1 className="text-2xl font-bold">Near Bedroom Switch</h1>
+                                <p className="text-slate-400 text-sm mt-1">Tap a button below to see what it does.</p>
+                            </div>
+                        </div>
+
+                        {/* Scrollable Content Area */}
+                        <div className="flex-1 overflow-y-auto p-6 bg-slate-50/50 no-scrollbar">
+                            <div className="flex flex-col gap-8">
+                                {/* The Visual Representation of the Switch */}
+                                <div className="relative">
+                                    <div className="absolute -inset-4 bg-white rounded-3xl shadow-sm border border-slate-100"></div>
+                                    <div className="relative z-10">
+                                        {/* Main Large Button */}
+                                        <div className="mb-4">
+                                            <button
+                                                onClick={() => setSelectedId('main')}
+                                                className={`w-full relative overflow-hidden rounded-xl p-6 transition-all duration-200 flex items-center justify-between border-2 text-left ${
+                                                    selectedId === 'main' 
+                                                    ? 'border-blue-500 ring-4 ring-blue-500/10 bg-white' 
+                                                    : 'border-slate-200 bg-slate-50 hover:bg-white hover:border-slate-300'
+                                                }`}
+                                            >
+                                                <div className="flex flex-col">
+                                                    <span className="text-xs font-bold uppercase tracking-wider text-slate-400">Main Button</span>
+                                                    <span className="text-lg font-bold text-slate-700">Living Room Lamp</span>
+                                                </div>
+                                                <Lamp size={28} className={selectedId === 'main' ? 'text-blue-500' : 'text-slate-400'} />
+                                            </button>
+                                        </div>
+
+                                        {/* 4 Scene Buttons Grid */}
+                                        <div className="grid grid-cols-2 gap-3">
+                                            {buttons.slice(1).map((btn) => (
+                                                <button
+                                                    key={btn.id}
+                                                    onClick={() => setSelectedId(btn.id)}
+                                                    className={`h-28 rounded-xl flex flex-col items-center justify-center gap-2 transition-all duration-200 border-2 ${
+                                                        selectedId === btn.id
+                                                        ? `border-current ring-4 ring-current ring-opacity-10 bg-white ${btn.colorClass.split(' ')[1]}`
+                                                        : 'border-slate-200 bg-slate-50 text-slate-400 hover:bg-white hover:border-slate-300'
+                                                    }`}
+                                                >
+                                                    <btn.icon size={28} />
+                                                    <span className="text-xs font-bold text-center px-2">{btn.label}</span>
+                                                    <span className={`w-2 h-2 rounded-full mt-1 ${
+                                                        btn.id === 'scene1' ? 'bg-emerald-400' :
+                                                        btn.id === 'scene2' ? 'bg-blue-400' :
+                                                        btn.id === 'scene3' ? 'bg-purple-400' :
+                                                        'bg-amber-400'
+                                                    }`}></span>
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Instruction Card */}
+                                <div className={`transition-all duration-500 ease-in-out ${selectedId ? 'opacity-100 translate-y-0' : 'opacity-50 translate-y-4 grayscale'}`}>
+                                    {selectedButton ? (
+                                        <div className="bg-white rounded-2xl p-5 shadow-lg border border-slate-100">
+                                            <div className="flex items-center gap-3 mb-4 border-b border-slate-100 pb-4">
+                                                <div className={`p-3 rounded-full ${selectedButton.colorClass} bg-opacity-20`}>
+                                                    <selectedButton.icon size={24} />
+                                                </div>
+                                                <div>
+                                                    <h3 className="font-bold text-slate-800 text-lg">{selectedButton.label}</h3>
+                                                    <p className="text-slate-500 text-xs">LED Indicator: <span className="font-semibold">{selectedButton.ledColor}</span></p>
+                                                </div>
+                                            </div>
+                                            
+                                            <div className="space-y-3">
+                                                {selectedButton.instructions.map((inst, idx) => (
+                                                    <div key={idx} className="flex items-center gap-4 bg-slate-50 p-3 rounded-xl border border-slate-100">
+                                                        <div className="w-10 h-10 rounded-full bg-white shadow-sm flex items-center justify-center text-slate-600 shrink-0">
+                                                            <inst.icon size={18} />
+                                                        </div>
+                                                        <div>
+                                                            <p className="text-xs font-bold text-slate-400 uppercase tracking-wide">{inst.label}</p>
+                                                            <p className="font-medium text-slate-700 text-sm leading-tight">{inst.action}</p>
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <div className="text-center py-8 text-slate-400">
+                                            <div className="inline-block p-4 rounded-full bg-slate-100 mb-3 animate-pulse">
+                                                <Info size={32} />
+                                            </div>
+                                            <p className="text-sm">Select a button above to identify it.</p>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
-                <div class="key" data-key="2" tabindex="0" role="button" aria-label="Key 2 – Recessed Lights">
-                  <span class="label">Key 2</span>
-                  ②
-                  <span class="led" id="led-2"></span>
-                </div>
-              </div>
-              <div class="row">
-                <div class="key" data-key="3" tabindex="0" role="button" aria-label="Key 3 – Christmas Mode / Twinkle Tree">
-                  <span class="label">Key 3</span>
-                  ③
-                  <span class="led" id="led-3"></span>
-                </div>
-                <div class="key" data-key="4" tabindex="0" role="button" aria-label="Key 4 – Living Room Light / All Off Scene">
-                  <span class="label">Key 4</span>
-                  ④
-                  <span class="led" id="led-4"></span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
+            );
+        };
 
-      <section class="card" id="detailsCard" aria-live="polite">
-        <h2 id="detailsTitle">Details</h2>
-        <div class="content details">
-          <div class="box">
-            <h3 id="boxTitle">Select a control to see its actions</h3>
-            <div class="kv" id="kv">
-              <div class="muted">Friendly name:</div>
-              <div class="muted">—</div>
-              <div class="muted">Entity tracking:</div>
-              <div class="muted">—</div>
-              <div class="muted">Primary (single‑tap):</div>
-              <div class="muted">—</div>
-              <div class="muted">Alternates:</div>
-              <div class="muted">—</div>
-              <div class="muted">LED behavior:</div>
-              <div class="muted">—</div>
-            </div>
-          </div>
-
-          <div class="box">
-            <h3>LED Color Map</h3>
-            <div id="colorGrid" class="colorGrid"></div>
-          </div>
-
-          <div class="box">
-            <h3>All Actions</h3>
-            <div id="allList" class="list"></div>
-          </div>
-
-          <div class="footer">Source: Home Assistant automation <code>Scene Controller – Near Bedroom</code>.</div>
-        </div>
-      </section>
-    </main>
-  </div>
-
-  <script>
-  // Gesture badges
-  const BADGES = {
-    single: '<span class="badge" title="Single tap">⭘ Single</span>',
-    hold:   '<span class="badge" title="Hold">⧖ Hold</span>',
-    double: '<span class="badge" title="Double tap">×2 Double</span>',
-    alt:    '<span class="badge" title="Alt gesture">★ Alt</span>'
-  };
-
-  // LED map: common ZEN32 palette
-  const LED_MAP = {
-    1: {name:'Blue',   color:'#3b82f6'},
-    2: {name:'Green',  color:'#16a34a'},
-    3: {name:'Amber',  color:'#f59e0b'},
-    4: {name:'Red',    color:'#ef4444'},
-    5: {name:'Purple', color:'#8b5cf6'},
-    6: {name:'Yellow', color:'#eab308'},
-    7: {name:'Cyan',   color:'#06b6d4'}
-  };
-
-  // Config (friendly names + gestures inferred from your YAML)
-  const CONFIG = {
-    keys: {
-      0: { name:"Paddle / Main", friendly:"Main Relay", tracks:"switch.living_room_lamp", actions:[
-        { type:"single", icon:"single", label:"Toggle Living Room Lamp", domain:"switch", entity:"switch.living_room_lamp" }
-      ], led:{} },
-      1: { name:"Key 1", friendly:"Master Bedroom Light", tracks:"switch.master_bedroom_light", actions:[
-            { type:"single", icon:"single", label:"Toggle Master Bedroom Light", domain:"switch", entity:"switch.master_bedroom_light" }
-          ], led:{ off_color:"2", off_brightness:"2", on_brightness:"0" } },
-      2: { name:"Key 2", friendly:"Recessed Lights", tracks:"light.living_room_recessed", actions:[
-            { type:"single", icon:"single", label:"Turn ON Recessed Lights", domain:"light", entity:"light.living_room_recessed" },
-            { type:"hold",   icon:"hold",   label:"Turn OFF Recessed Lights", domain:"light", entity:"light.living_room_recessed" }
-          ], led:{} },
-      3: { name:"Key 3", friendly:"Christmas Mode / Twinkle Tree", tracks:"light.twinkle_tree", actions:[
-            { type:"single", icon:"single", label:"Enable Christmas Mode", domain:"input_boolean", entity:"input_boolean.christmas", op:"turn_on" },
-            { type:"double", icon:"double", label:"Disable Christmas Mode", domain:"input_boolean", entity:"input_boolean.christmas", op:"turn_off" }
-          ], led:{ off_color:"4", off_brightness:"2", on_color:"4" } },
-      4: { name:"Key 4", friendly:"Living Room / All Off", tracks:"light.living_room_light", actions:[
-            { type:"hold", icon:"hold", label:"All Off (LR Light, Fan, Zooz Switch)", batch:[
-              { domain:"light", op:"turn_off", entity:"light.living_room_light" },
-              { domain:"fan",  op:"turn_off", entity:"fan (…119b)" },
-              { domain:"switch", op:"turn_off", entity:"switch (75327a… )" }
-            ]}
-          ], led:{ off_color:"5", off_brightness:"2", on_brightness:"0" } },
-    }
-  };
-
-  function prettyEntity(e){
-    if(!e) return "—"; const id=(e.split(".")[1]||e); return id.replace(/_/g," ").replace(/\b\w/g,c=>c.toUpperCase());
-  }
-
-  function badge(icon){ return BADGES[icon] || BADGES.alt; }
-
-  function actionRow(a){
-    if(a.batch){
-      return `<div class="list-item"><div class="t">${badge(a.icon||'alt')}${a.label}</div>`+
-             a.batch.map(x=>`<div class=\"muted\">• ${x.op||'action'} <code>${x.domain}</code> → <code>${x.entity}</code></div>`).join("")+
-             `</div>`;
-    }
-    const verb = a.op? a.op.replace("_"," ") : (a.label.toLowerCase().includes("toggle")? "toggle" : "execute");
-    return `<div class=\"list-item\"><div class=\"t\">${badge(a.icon||a.type)}${a.label}</div><div class=\"muted\">• ${verb} <code>${a.domain}</code> → <code>${a.entity||''}</code></div></div>`;
-  }
-
-  function ledChips(led){
-    if(!led || Object.keys(led).length===0) return '<span class="muted">—</span>';
-    const toChip = (k,v)=>{
-      const n = Number(v); const m = LED_MAP[n];
-      const sw = m? `<span class=\"dot\" style=\"color:${m.color}\"></span> <strong>${m.name}</strong> <code>${n}</code>` : `<code>${v}</code>`;
-      return `<span class=\"chip\">${k.replace('_',' ')}: ${sw}</span>`;
-    };
-    return '<div class="chips">'+Object.entries(led).map(([k,v])=>toChip(k,v)).join("")+'</div>';
-  }
-
-  function setActive(key){
-    // Toggle visual state
-    document.querySelectorAll('.key,.paddle').forEach(k=>k.classList.toggle('active', k.getAttribute('data-key')==key));
-
-    const meta = CONFIG.keys[key];
-    const title = key==0? 'Paddle / Main' : meta.name;
-    document.getElementById('detailsTitle').textContent = `${title} – Details`;
-    document.getElementById('boxTitle').textContent = meta.friendly || title;
-
-    const primary = meta.actions.find(a=>a.type==='single');
-    const alts = meta.actions.filter(a=>a.type!=='single');
-
-    const kv = document.getElementById('kv');
-    kv.innerHTML = ''+
-      `<div>Friendly name:</div><div>${meta.friendly || '<span class="muted">—</span>'}</div>`+
-      `<div>Entity tracking:</div><div><code>${meta.tracks||'—'}</code> (${prettyEntity(meta.tracks)})</div>`+
-      `<div>Primary (single‑tap):</div><div>${primary? actionRow(primary): '<span class="muted">—</span>'}</div>`+
-      `<div>Alternates:</div><div>${alts.length? alts.map(actionRow).join('') : '<span class="muted">—</span>'}</div>`+
-      `<div>LED behavior:</div><div>${ledChips(meta.led)}</div>`;
-  }
-
-  function buildAllList(){
-    const list = document.getElementById('allList');
-    list.innerHTML = Object.entries(CONFIG.keys).map(([k,v])=>{
-      const lines = [];
-      if(v.actions.length===0){ lines.push('<div class="muted">(No scenes configured)</div>'); }
-      v.actions.forEach(a=> lines.push(actionRow(a)) );
-      return `<div class="list-item"><div class="t">${(k==0? 'Paddle / Main' : v.name)} <span class="muted">–</span> ${v.friendly || prettyEntity(v.tracks)}</div>${lines.join('')}</div>`;
-    }).join('');
-  }
-
-  function updateLEDDots(){
-    const m = CONFIG.keys;
-    const setDot = (key, colorNum)=>{
-      const dot = document.getElementById(`led-${key}`);
-      if(!dot) return;
-      if(!colorNum){ dot.style.visibility='hidden'; return; }
-      const map = LED_MAP[Number(colorNum)];
-      dot.style.visibility='visible';
-      dot.style.color = (map && map.color) || '#3b82f6';
-      dot.title = map? `${map.name} (${colorNum})` : `LED color ${colorNum}`;
-    };
-    setDot(1, (m[1].led.off_color||m[1].led.on_color));
-    setDot(2, (m[2].led.off_color||m[2].led.on_color));
-    setDot(3, (m[3].led.off_color||m[3].led.on_color));
-    setDot(4, (m[4].led.off_color||m[4].led.on_color));
-  }
-
-  function buildColorGrid(){
-    const host = document.getElementById('colorGrid');
-    host.innerHTML = Object.entries(LED_MAP).map(([num,info])=>
-      `<div class="swatch"><span class="dot" style="color:${info.color}"></span> <strong>${info.name}</strong> <code>${num}</code></div>`
-    ).join('');
-  }
-
-  // Attach interactions (click + touch)
-  function wire(el){
-    const key = el.getAttribute('data-key');
-    el.addEventListener('click', ()=> setActive(key));
-    el.addEventListener('touchstart', ()=> setActive(key), {passive:true});
-    el.addEventListener('keydown', (e)=>{ if(e.key==='Enter' || e.key===' '){ e.preventDefault(); setActive(key); }});
-  }
-
-  // Layout toggle & print
-  document.getElementById('toggleLayout').addEventListener('click', ()=>{
-    const main = document.querySelector('main');
-    const current = getComputedStyle(main).gridTemplateColumns;
-    main.style.gridTemplateColumns = current.startsWith('360px')? '1fr 360px' : '360px 1fr';
-  });
-  document.getElementById('printBtn').addEventListener('click', ()=>window.print());
-
-  // Init
-  document.querySelectorAll('[data-key]').forEach(wire);
-  buildAllList();
-  updateLEDDots();
-  buildColorGrid();
-  setActive(1);
-  </script>
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<SwitchGuide />);
+    </script>
 </body>
 </html>
