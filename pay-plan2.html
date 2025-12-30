@@ -8,6 +8,9 @@
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Zoom & Annotation Plugins -->
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.0.1/dist/chartjs-plugin-annotation.min.js"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
         body { font-family: 'Inter', sans-serif; scroll-behavior: smooth; }
@@ -15,19 +18,22 @@
         :root {
             --rr-blue: #004b8d;
             --rr-blue-light: #005fb3;
+            --rr-accent: #f0f9ff;
         }
 
         .glass-panel {
-            background: rgba(255, 255, 255, 0.9);
+            background: rgba(255, 255, 255, 0.95);
             backdrop-filter: blur(12px);
             border: 1px solid rgba(226, 232, 240, 0.8);
         }
         .custom-scrollbar::-webkit-scrollbar { width: 6px; }
         .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+        
         th.sortable { cursor: pointer; user-select: none; }
         th.sortable:hover { background-color: #f8fafc; color: var(--rr-blue); }
-        .chart-container { position: relative; height: 500px; width: 100%; }
+        
+        .chart-container { position: relative; height: 550px; width: 100%; cursor: crosshair; }
         
         .toggle-btn { transition: all 0.2s ease; border: 1px solid transparent; }
         .toggle-btn.active { background-color: var(--rr-blue); color: white; border-color: var(--rr-blue-light); box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1); }
@@ -35,27 +41,31 @@
         .bg-rr-blue { background-color: var(--rr-blue); }
         .text-rr-blue { color: var(--rr-blue); }
 
-        .tooltip-container { position: relative; display: inline-block; }
-        .tooltip-box {
+        .info-trigger { position: relative; display: inline-block; }
+        .info-popover {
             visibility: hidden;
-            width: 280px;
-            background-color: #1e293b;
-            color: #fff;
+            width: 320px;
+            background-color: white;
+            color: #1e293b;
             text-align: left;
-            border-radius: 12px;
-            padding: 16px;
+            border-radius: 16px;
+            padding: 20px;
             position: absolute;
             z-index: 100;
-            top: 125%;
+            top: calc(100% + 12px);
             right: 0;
             opacity: 0;
-            transition: opacity 0.3s;
-            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
-            font-weight: 400;
-            font-size: 0.75rem;
-            line-height: 1.4;
+            transform: translateY(10px);
+            transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+            border: 1px solid #e2e8f0;
         }
-        .tooltip-container:hover .tooltip-box { visibility: visible; opacity: 1; }
+        .info-trigger:hover .info-popover { visibility: visible; opacity: 1; transform: translateY(0); }
+        .info-popover::before {
+            content: ''; position: absolute; top: -6px; right: 15px; width: 12px; height: 12px;
+            background: white; border-left: 1px solid #e2e8f0; border-top: 1px solid #e2e8f0; transform: rotate(45deg);
+        }
+        canvas { -webkit-tap-highlight-color: transparent; }
     </style>
 </head>
 <body class="bg-slate-50 text-slate-900 min-h-screen">
@@ -66,7 +76,7 @@
             <div>
                 <div class="flex items-center gap-3 mb-1">
                     <div class="p-2.5 bg-rr-blue rounded-2xl shadow-lg shadow-blue-200">
-                        <i data-lucide="bar-chart-3" class="w-6 h-6 text-white"></i>
+                        <i data-lucide="building-2" class="w-6 h-6 text-white"></i>
                     </div>
                     <h1 class="text-3xl font-black tracking-tight text-slate-900">
                         Round Rock <span class="text-rr-blue">Pay Plan</span>
@@ -76,23 +86,25 @@
             </div>
             
             <div class="flex flex-wrap items-center gap-3 ml-12 lg:ml-0">
-                <div class="tooltip-container">
-                    <button class="p-2.5 text-slate-400 hover:text-rr-blue bg-white rounded-xl border border-slate-200 transition-colors">
-                        <i data-lucide="info" class="w-5 h-5"></i>
+                <div class="info-trigger">
+                    <button class="p-2.5 text-slate-400 hover:text-rr-blue bg-white rounded-xl border border-slate-200 transition-colors shadow-sm">
+                        <i data-lucide="help-circle" class="w-5 h-5"></i>
                     </button>
-                    <div class="tooltip-box">
-                        <p class="font-bold text-rr-blue-light mb-2 uppercase tracking-widest text-[10px]">XLSX Formatting Guide</p>
-                        <p class="mb-2">Your Excel file must contain these exact headers (case-insensitive):</p>
-                        <ul class="space-y-1 list-disc list-inside text-slate-300">
-                            <li>Employee Number</li>
-                            <li>Last Name</li>
-                            <li>First Name</li>
-                            <li>Job Title</li>
-                            <li>Personnel Status</li>
-                            <li>Service Date (MM/DD/YYYY)</li>
-                            <li>Pay Grade</li>
-                            <li>Current Hourly Rate</li>
-                        </ul>
+                    <div class="info-popover">
+                        <div class="flex items-center gap-2 mb-3">
+                            <div class="p-1.5 bg-blue-50 rounded-lg"><i data-lucide="file-check" class="w-4 h-4 text-rr-blue"></i></div>
+                            <p class="font-bold text-slate-900 uppercase tracking-wider text-[11px]">XLSX Requirements</p>
+                        </div>
+                        <p class="text-[13px] text-slate-500 mb-3 leading-relaxed">System expects these headers (case-insensitive):</p>
+                        <div class="space-y-1.5 text-[12px] font-semibold text-slate-700">
+                            <div class="flex items-center gap-2"><div class="w-1.5 h-1.5 rounded-full bg-rr-blue"></div> Employee Number</div>
+                            <div class="flex items-center gap-2"><div class="w-1.5 h-1.5 rounded-full bg-rr-blue"></div> Last Name & First Name</div>
+                            <div class="flex items-center gap-2"><div class="w-1.5 h-1.5 rounded-full bg-rr-blue"></div> Job Title</div>
+                            <div class="flex items-center gap-2"><div class="w-1.5 h-1.5 rounded-full bg-rr-blue"></div> Personnel Status</div>
+                            <div class="flex items-center gap-2"><div class="w-1.5 h-1.5 rounded-full bg-rr-blue"></div> Service Date (MM/DD/YYYY)</div>
+                            <div class="flex items-center gap-2"><div class="w-1.5 h-1.5 rounded-full bg-rr-blue"></div> Pay Grade</div>
+                            <div class="flex items-center gap-2"><div class="w-1.5 h-1.5 rounded-full bg-rr-blue"></div> Current Hourly Rate</div>
+                        </div>
                     </div>
                 </div>
 
@@ -112,10 +124,10 @@
         <div id="empty-state" class="bg-white rounded-[2.5rem] border-2 border-dashed border-slate-200 p-12 text-center py-32">
             <div class="max-w-md mx-auto">
                 <div class="w-20 h-20 bg-blue-50 rounded-3xl flex items-center justify-center mx-auto mb-6">
-                    <i data-lucide="scatter-chart" class="w-10 h-10 text-rr-blue"></i>
+                    <i data-lucide="pie-chart" class="w-10 h-10 text-rr-blue"></i>
                 </div>
                 <h2 class="text-2xl font-extrabold text-slate-800 mb-3">Round Rock Analysis</h2>
-                <p class="text-slate-500 mb-8 leading-relaxed">Upload the <b>Employee Inquiry XLSX</b> file to view pay distribution and longevity. <br> 100s: Exempt | 200s: Non-Exempt.</p>
+                <p class="text-slate-500 mb-8 leading-relaxed">Upload the <b>Employee Inquiry XLSX</b> file to view pay distribution and longevity. <br> 200s: Non-Exempt | 100s: Exempt.</p>
                 <button onclick="document.getElementById('xls-input').click()" class="px-8 py-3 bg-rr-blue text-white rounded-2xl font-bold shadow-lg shadow-blue-100 hover:bg-blue-800 transition-all">
                     Select XLSX File
                 </button>
@@ -125,7 +137,7 @@
         <!-- Main Dashboard -->
         <div id="main-content" class="hidden space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
             
-            <!-- Summary Stats (Dynamic) -->
+            <!-- Summary Stats -->
             <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <div class="glass-panel p-6 rounded-3xl shadow-sm border-white">
                     <p class="text-slate-400 text-[10px] font-black uppercase tracking-widest mb-1">Employees Selected</p>
@@ -133,7 +145,7 @@
                 </div>
                 <div class="glass-panel p-6 rounded-3xl shadow-sm border-white">
                     <p class="text-slate-400 text-[10px] font-black uppercase tracking-widest mb-1">Avg Hourly Rate</p>
-                    <h3 id="stat-avg-hourly" class="text-3xl font-black text-rr-blue">$0.00</h3>
+                    <h3 id="stat-avg-hourly" class="text-3xl font-black text-rr-blue">$0</h3>
                 </div>
                 <div class="glass-panel p-6 rounded-3xl shadow-sm border-white">
                     <p class="text-slate-400 text-[10px] font-black uppercase tracking-widest mb-1">Avg Longevity</p>
@@ -148,21 +160,27 @@
             <!-- Visualization Section -->
             <div class="bg-white rounded-[2rem] shadow-sm border border-slate-200 overflow-hidden">
                 <div class="p-6 border-b border-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-6">
-                    <div>
+                    <div class="flex items-center gap-4">
                         <h3 class="text-lg font-bold flex items-center gap-2">
                             <i data-lucide="activity" class="w-5 h-5 text-rr-blue"></i>
                             Distribution Model
                         </h3>
-                        <p class="text-xs text-slate-400 font-medium italic">Sorting: Non-Exempt (200s) grouped before Exempt (100s).</p>
+                        <div class="hidden md:flex gap-1.5 bg-slate-50 p-1.5 rounded-xl border border-slate-200">
+                            <button onclick="handleZoom('in')" class="p-1.5 hover:bg-white hover:text-rr-blue text-slate-400 rounded-lg transition-all" title="Zoom In"><i data-lucide="zoom-in" class="w-4 h-4"></i></button>
+                            <button onclick="handleZoom('out')" class="p-1.5 hover:bg-white hover:text-rr-blue text-slate-400 rounded-lg transition-all" title="Zoom Out"><i data-lucide="zoom-out" class="w-4 h-4"></i></button>
+                            <button onclick="handleZoom('reset')" class="p-1.5 hover:bg-white hover:text-rr-blue text-slate-400 border-l border-slate-200 pl-2 rounded-lg transition-all" title="Reset Chart"><i data-lucide="refresh-cw" class="w-4 h-4"></i></button>
+                        </div>
                     </div>
 
-                    <div class="flex bg-slate-100 p-1 rounded-xl border border-slate-200">
-                        <button onclick="setXAxis('grade')" id="toggle-grade" class="toggle-btn active px-4 py-2 text-xs font-bold rounded-lg transition-all">
-                            By Pay Grade
-                        </button>
-                        <button onclick="setXAxis('tenure')" id="toggle-tenure" class="toggle-btn px-4 py-2 text-xs font-bold rounded-lg transition-all">
-                            By Longevity
-                        </button>
+                    <div class="flex flex-wrap gap-3">
+                        <div class="flex bg-slate-100 p-1 rounded-xl border border-slate-200 shadow-inner">
+                            <button onclick="setXAxis('grade')" id="toggle-grade" class="toggle-btn active px-4 py-2 text-xs font-bold rounded-lg transition-all">
+                                By Pay Grade
+                            </button>
+                            <button onclick="setXAxis('tenure')" id="toggle-tenure" class="toggle-btn px-4 py-2 text-xs font-bold rounded-lg transition-all">
+                                By Longevity
+                            </button>
+                        </div>
                     </div>
                 </div>
                 <div class="p-6">
@@ -178,7 +196,7 @@
                     <div class="flex items-center justify-between">
                         <h3 class="text-lg font-bold flex items-center gap-2">
                             <i data-lucide="table-2" class="w-5 h-5 text-rr-blue"></i>
-                            Employee Directory
+                            Employee Listing
                         </h3>
                         <span id="record-count" class="text-[10px] font-black bg-slate-100 text-slate-500 px-3 py-1 rounded-full uppercase">0 Records Found</span>
                     </div>
@@ -186,13 +204,13 @@
                     <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
                         <div class="relative group">
                             <i data-lucide="search" class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-rr-blue transition-colors"></i>
-                            <input id="search-input" type="text" placeholder="Search Name or Job Title..." class="pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-800 outline-none w-full">
+                            <input id="search-input" type="text" placeholder="Search Name or Job Title..." class="pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-800 outline-none w-full shadow-sm">
                         </div>
-                        <select id="filter-status" class="px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-800 outline-none appearance-none cursor-pointer">
+                        <select id="filter-status" class="px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-800 outline-none appearance-none cursor-pointer shadow-sm">
                             <option value="">All Personnel Statuses</option>
                         </select>
-                        <select id="filter-grade" class="px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-800 outline-none appearance-none cursor-pointer">
-                            <option value="">All Active Pay Grades</option>
+                        <select id="filter-grade" class="px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-800 outline-none appearance-none cursor-pointer shadow-sm">
+                            <option value="">All Pay Grades</option>
                         </select>
                     </div>
                 </div>
@@ -223,23 +241,42 @@
         let scatterChart = null;
         let xAxisMode = 'grade';
 
+        // Compensation Reference Table
+        const GRADE_ANALYSIS = {
+            205: { min: 19.00, mid: 22.00, max: 25.00 },
+            206: { min: 19.50, mid: 23.00, max: 26.50 },
+            207: { min: 20.00, mid: 23.75, max: 27.50 },
+            208: { min: 20.50, mid: 24.75, max: 29.00 },
+            209: { min: 21.50, mid: 26.00, max: 30.50 },
+            210: { min: 22.50, mid: 27.50, max: 32.50 },
+            211: { min: 24.00, mid: 29.25, max: 34.50 },
+            212: { min: 26.00, mid: 31.75, max: 37.50 },
+            213: { min: 28.00, mid: 34.25, max: 40.50 },
+            214: { min: 30.00, mid: 36.50, max: 43.00 },
+            215: { min: 31.00, mid: 37.50, max: 44.00 },
+            216: { min: 32.00, mid: 39.25, max: 46.50 },
+            105: { min: 28.00, mid: 35.00, max: 42.00 },
+            106: { min: 29.00, mid: 36.50, max: 44.00 },
+            107: { min: 31.00, mid: 38.75, max: 46.50 },
+            108: { min: 33.00, mid: 41.00, max: 49.00 },
+            109: { min: 35.00, mid: 43.75, max: 52.50 },
+            110: { min: 37.00, mid: 46.50, max: 56.00 },
+            111: { min: 39.00, mid: 49.25, max: 59.50 },
+            112: { min: 42.50, mid: 53.00, max: 63.50 },
+            113: { min: 46.00, mid: 57.25, max: 68.50 },
+            114: { min: 50.00, mid: 62.25, max: 74.50 },
+            115: { min: 54.50, mid: 67.50, max: 80.50 }
+        };
+
         const MAPPING_KEYS = {
-            id: ['Employee Number'],
-            last: ['Last Name'],
-            first: ['First Name'],
-            title: ['Job Title'],
-            status: ['Personnel Status', 'Personnel Status ', 'Status'],
-            serviceDate: ['Service Date'],
-            grade: ['Pay Grade'],
-            rate: ['Current Hourly Rate']
+            id: ['Employee Number'], last: ['Last Name'], first: ['First Name'],
+            title: ['Job Title'], status: ['Personnel Status', 'Personnel Status ', 'Status'],
+            serviceDate: ['Service Date'], grade: ['Pay Grade'], rate: ['Current Hourly Rate']
         };
 
         const colors = ['#004b8d', '#ef4444', '#10b981', '#f59e0b', '#06b6d4', '#8b5cf6', '#ec4899', '#0072ce', '#14b8a6', '#f43f5e'];
 
-        function init() {
-            lucide.createIcons();
-            setupEvents();
-        }
+        function init() { lucide.createIcons(); setupEvents(); }
 
         function setupEvents() {
             document.getElementById('search-input').addEventListener('input', applyFiltersAndSort);
@@ -269,72 +306,55 @@
             if (!dateStr) return null;
             if (typeof dateStr === 'string' && dateStr.includes('/')) {
                 const parts = dateStr.split('/');
-                if (parts.length === 3) {
-                    const d = new Date(parseInt(parts[2]), parseInt(parts[0]) - 1, parseInt(parts[1]));
-                    if (!isNaN(d.getTime())) return d;
-                }
+                if (parts.length === 3) return new Date(parseInt(parts[2]), parseInt(parts[0]) - 1, parseInt(parts[1]));
             }
-            if (typeof dateStr === 'number') {
-                return new Date((dateStr - 25569) * 86400 * 1000);
-            }
+            if (typeof dateStr === 'number') return new Date((dateStr - 25569) * 86400 * 1000);
             const standard = new Date(dateStr);
             return isNaN(standard.getTime()) ? null : standard;
         }
 
-        function isExempt(grade) {
-            const g = parseInt(grade);
-            return g >= 100 && g < 200;
-        }
+        function isExempt(grade) { return parseInt(grade) >= 100 && parseInt(grade) < 200; }
 
         function getGradeSortOrder(a, b) {
-            // 200s (Non-Exempt) come first
             const typeA = isExempt(a) ? 1 : 0;
             const typeB = isExempt(b) ? 1 : 0;
             if (typeA !== typeB) return typeA - typeB;
-            return a - b; // Ascending within group
+            return a - b;
         }
+
+        const formatCurrency = (val, forceDecimals = false) => {
+            if (val === 0) return '$0';
+            const formatted = new Intl.NumberFormat('en-US', { 
+                style: 'currency', currency: 'USD', 
+                minimumFractionDigits: (val % 1 === 0 && !forceDecimals) ? 0 : 2,
+                maximumFractionDigits: 2 
+            }).format(val);
+            return formatted;
+        };
 
         function handleFileUpload(e) {
             const file = e.target.files[0];
             if (!file) return;
-
             const reader = new FileReader();
             reader.onload = (evt) => {
                 const bstr = evt.target.result;
                 const wb = XLSX.read(bstr, { type: 'binary' });
                 const ws = wb.Sheets[wb.SheetNames[0]];
                 const data = XLSX.utils.sheet_to_json(ws);
-                
                 const now = new Date();
-
                 rawData = data.map(row => {
-                    const svcDateStr = getVal(row, MAPPING_KEYS.serviceDate);
-                    const svcDate = parseServiceDate(svcDateStr);
-                    let tenure = 0;
-                    if (svcDate) {
-                        tenure = (now - svcDate) / (1000 * 60 * 60 * 24 * 365.25);
-                    }
+                    const svcDate = parseServiceDate(getVal(row, MAPPING_KEYS.serviceDate));
+                    let tenure = svcDate ? (now - svcDate) / (1000 * 60 * 60 * 24 * 365.25) : 0;
                     const gradeRaw = getVal(row, MAPPING_KEYS.grade);
-                    const rateRaw = getVal(row, MAPPING_KEYS.rate);
-                    const statusRaw = getVal(row, MAPPING_KEYS.status);
-
                     return {
-                        id: getVal(row, MAPPING_KEYS.id),
-                        last: getVal(row, MAPPING_KEYS.last),
-                        first: getVal(row, MAPPING_KEYS.first),
-                        title: getVal(row, MAPPING_KEYS.title) || "N/A",
-                        status: statusRaw ? statusRaw.toString().trim() : "N/A",
-                        grade: parseInt(gradeRaw),
-                        rate: parseFloat(rateRaw),
-                        tenure: isNaN(tenure) ? 0 : Math.max(0, tenure),
-                        exempt: isExempt(gradeRaw)
+                        id: getVal(row, MAPPING_KEYS.id), last: getVal(row, MAPPING_KEYS.last),
+                        first: getVal(row, MAPPING_KEYS.first), title: getVal(row, MAPPING_KEYS.title) || "N/A",
+                        status: (getVal(row, MAPPING_KEYS.status) || "N/A").toString().trim(),
+                        grade: parseInt(gradeRaw), rate: parseFloat(getVal(row, MAPPING_KEYS.rate)),
+                        tenure: Math.max(0, tenure), exempt: isExempt(gradeRaw)
                     };
                 }).filter(r => !isNaN(r.grade));
-
-                if (rawData.length > 0) {
-                    populateFilters();
-                    processDashboard();
-                }
+                if (rawData.length > 0) { populateFilters(); processDashboard(); }
             };
             reader.readAsBinaryString(file);
         }
@@ -342,19 +362,24 @@
         function populateFilters() {
             const statuses = [...new Set(rawData.map(r => r.status))].filter(s => s !== "N/A").sort();
             const grades = [...new Set(rawData.map(r => r.grade))].sort(getGradeSortOrder);
-
             document.getElementById('filter-status').innerHTML = '<option value="">All Personnel Statuses</option>' + 
                 statuses.map(s => `<option value="${s}">${s}</option>`).join('');
-            
-            document.getElementById('filter-grade').innerHTML = '<option value="">All Active Pay Grades</option>' + 
+            document.getElementById('filter-grade').innerHTML = '<option value="">All Pay Grades</option>' + 
                 grades.map(g => `<option value="${g}">Grade ${g}</option>`).join('');
         }
 
-        function setXAxis(mode) {
-            xAxisMode = mode;
+        function setXAxis(mode) { 
+            xAxisMode = mode; 
             document.getElementById('toggle-grade').classList.toggle('active', mode === 'grade');
             document.getElementById('toggle-tenure').classList.toggle('active', mode === 'tenure');
-            renderScatterPlot();
+            renderScatterPlot(); 
+        }
+
+        function handleZoom(type) {
+            if (!scatterChart) return;
+            if (type === 'in') scatterChart.zoom(1.1);
+            else if (type === 'out') scatterChart.zoom(0.9);
+            else scatterChart.resetZoom();
         }
 
         function applyFiltersAndSort() {
@@ -375,143 +400,131 @@
                     const result = getGradeSortOrder(a.grade, b.grade);
                     return sortDir === 'desc' ? -result : result;
                 }
-                let valA = a[sortField];
-                let valB = b[sortField];
-                if (typeof valA === 'string') valA = valA.toLowerCase();
-                if (typeof valB === 'string') valB = valB.toLowerCase();
+                let valA = a[sortField], valB = b[sortField];
+                if (typeof valA === 'string') { valA = valA.toLowerCase(); valB = valB.toLowerCase(); }
                 if (valA < valB) return sortDir === 'asc' ? -1 : 1;
                 if (valA > valB) return sortDir === 'asc' ? 1 : -1;
                 return 0;
             });
 
-            renderTable();
-            renderScatterPlot();
-            updateSummaryStats();
+            renderTable(); renderScatterPlot(); updateSummaryStats();
             document.getElementById('record-count').innerText = `${filteredData.length} Records Found`;
         }
 
         function updateSummaryStats() {
             const total = filteredData.length;
             if (total === 0) {
-                document.getElementById('stat-total-emp').innerText = '0';
-                document.getElementById('stat-avg-hourly').innerText = '$0.00';
-                document.getElementById('stat-avg-tenure').innerText = '0.0 Yrs';
-                document.getElementById('stat-total-payroll').innerText = '$0';
+                ['stat-total-emp', 'stat-avg-hourly', 'stat-avg-tenure', 'stat-total-payroll'].forEach(id => document.getElementById(id).innerText = id.includes('tenure') ? '0.0 Yrs' : id.includes('payroll') ? '$0' : '0');
                 return;
             }
-
             const totalHourly = filteredData.reduce((acc, curr) => acc + (curr.rate || 0), 0);
             const totalTenure = filteredData.reduce((acc, curr) => acc + (curr.tenure || 0), 0);
-            const totalAnnual = totalHourly * 2080;
-
             document.getElementById('stat-total-emp').innerText = total;
-            document.getElementById('stat-avg-hourly').innerText = `$${(totalHourly / total).toFixed(2)}`;
+            document.getElementById('stat-avg-hourly').innerText = formatCurrency(totalHourly / total);
             document.getElementById('stat-avg-tenure').innerText = `${(totalTenure / total).toFixed(1)} Yrs`;
-            document.getElementById('stat-total-payroll').innerText = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(totalAnnual);
+            document.getElementById('stat-total-payroll').innerText = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(totalHourly * 2080);
         }
 
         function processDashboard() {
             document.getElementById('empty-state').classList.add('hidden');
             document.getElementById('main-content').classList.remove('hidden');
             document.getElementById('export-btn').classList.remove('hidden');
-            applyFiltersAndSort();
-            lucide.createIcons();
+            applyFiltersAndSort(); lucide.createIcons();
         }
 
         function renderTable() {
-            const body = document.getElementById('employee-body');
-            body.innerHTML = filteredData.map(emp => `
+            document.getElementById('employee-body').innerHTML = filteredData.map(emp => `
                 <tr class="hover:bg-blue-50/30 transition-colors group">
-                    <td class="px-6 py-4">
-                        <div class="font-bold text-slate-800">${emp.last}, ${emp.first}</div>
-                        <div class="text-[9px] text-slate-400 font-black uppercase">ID: ${emp.id}</div>
-                    </td>
-                    <td class="px-6 py-4">
-                        <div class="text-sm font-semibold text-slate-600 truncate max-w-[200px]">${emp.title}</div>
-                        <div class="text-[9px] text-blue-800/60 font-black uppercase tracking-wider">${emp.status}</div>
-                    </td>
-                    <td class="px-6 py-4">
-                        <div class="flex flex-col">
-                            <span class="text-xs font-bold text-slate-700">Grade ${emp.grade}</span>
-                            <span class="text-[9px] font-black ${emp.exempt ? 'text-blue-600' : 'text-orange-600'} uppercase">
-                                ${emp.exempt ? 'FLSA Exempt' : 'Non-Exempt'}
-                            </span>
-                        </div>
-                    </td>
-                    <td class="px-6 py-4 text-xs font-bold text-slate-600">
-                        ${emp.tenure.toFixed(1)} <span class="text-slate-400 font-medium italic">yrs</span>
-                    </td>
-                    <td class="px-6 py-4 text-right">
-                        <div class="font-black text-slate-900">$${emp.rate.toFixed(2)}</div>
-                        <div class="text-[9px] text-slate-400 font-bold uppercase tracking-tighter">$${(emp.rate * 2080).toLocaleString()} / YR</div>
-                    </td>
+                    <td class="px-6 py-4"><div class="font-bold text-slate-800">${emp.last}, ${emp.first}</div><div class="text-[9px] text-slate-400 font-black uppercase tracking-widest">ID: ${emp.id}</div></td>
+                    <td class="px-6 py-4"><div class="text-sm font-semibold text-slate-600 truncate max-w-[200px]">${emp.title}</div><div class="text-[9px] text-blue-800/60 font-black uppercase tracking-wider">${emp.status}</div></td>
+                    <td class="px-6 py-4"><div class="flex flex-col"><span class="text-xs font-bold text-slate-700">Grade ${emp.grade}</span><span class="text-[9px] font-black ${emp.exempt ? 'text-blue-600' : 'text-orange-600'} uppercase">${emp.exempt ? 'FLSA Exempt' : 'Non-Exempt'}</span></div></td>
+                    <td class="px-6 py-4 text-xs font-bold text-slate-600">${emp.tenure.toFixed(1)} <span class="text-slate-400 font-medium italic">yrs</span></td>
+                    <td class="px-6 py-4 text-right"><div class="font-black text-slate-900">${formatCurrency(emp.rate)}</div><div class="text-[9px] text-slate-400 font-bold uppercase tracking-tighter">$${(emp.rate * 2080).toLocaleString()} / YR</div></td>
                 </tr>
             `).join('');
         }
 
         function renderScatterPlot() {
             const ctx = document.getElementById('mainScatterChart').getContext('2d');
-            const gradeLabels = [...new Set(filteredData.map(r => r.grade))].sort(getGradeSortOrder);
+            const gradeFilter = document.getElementById('filter-grade').value;
+            const sortedGradeSequence = [...new Set(filteredData.map(r => r.grade))].sort(getGradeSortOrder);
             
-            const datasets = gradeLabels.map((g, i) => {
-                const points = filteredData.filter(r => r.grade === g).map(r => ({
-                    x: xAxisMode === 'grade' ? g.toString() : r.tenure,
-                    y: r.rate,
-                    name: `${r.last}, ${r.first}`,
-                    title: r.title,
-                    tenure: r.tenure,
-                    grade: r.grade
-                }));
+            const datasets = sortedGradeSequence.map((g, i) => ({
+                label: `Grade ${g}`,
+                data: filteredData.filter(r => r.grade === g).map(r => ({
+                    x: xAxisMode === 'grade' ? sortedGradeSequence.indexOf(g) : r.tenure,
+                    y: r.rate, name: `${r.last}, ${r.first}`, title: r.title, tenure: r.tenure, grade: r.grade
+                })),
+                backgroundColor: colors[i % colors.length],
+                pointRadius: filteredData.length > 500 ? 3 : 6, pointHoverRadius: 10
+            }));
 
-                return {
-                    label: `Grade ${g}`,
-                    data: points,
-                    backgroundColor: colors[i % colors.length],
-                    pointRadius: filteredData.length > 500 ? 3 : 6,
-                    pointHoverRadius: 10,
+            // Annotations
+            const annotations = {};
+            let yMin = undefined, yMax = undefined;
+
+            if (gradeFilter && GRADE_ANALYSIS[gradeFilter]) {
+                const analysis = GRADE_ANALYSIS[gradeFilter];
+                yMin = Math.floor(analysis.min - 2);
+                yMax = Math.ceil(analysis.max + 2);
+
+                annotations.band = {
+                    type: 'box', yMin: analysis.min, yMax: analysis.max,
+                    backgroundColor: 'rgba(0, 75, 141, 0.05)', borderColor: 'transparent',
+                    label: { content: 'Pay Range', display: true, position: 'start', font: { size: 10 }, color: '#475569' }
                 };
-            });
+                annotations.midLine = {
+                    type: 'line', yMin: analysis.mid, yMax: analysis.mid,
+                    borderColor: '#94a3b8', borderWidth: 1, borderDash: [6, 6],
+                    label: { 
+                        content: `Midpoint: ${formatCurrency(analysis.mid)}`, 
+                        display: true, position: 'end', 
+                        font: { size: 9, weight: 'normal' },
+                        color: '#64748b', // Subtle but legible slate
+                        backgroundColor: 'white', // Rounded white box background
+                        borderRadius: 6,
+                        padding: { top: 4, bottom: 4, left: 8, right: 8 },
+                        borderWidth: 1,
+                        borderColor: '#e2e8f0'
+                    }
+                };
+            }
 
             if (scatterChart) scatterChart.destroy();
-
             scatterChart = new Chart(ctx, {
-                type: 'scatter',
-                data: { datasets },
+                type: 'scatter', data: { datasets },
                 options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
+                    responsive: true, maintainAspectRatio: false,
+                    interaction: { mode: 'nearest', intersect: true, axis: 'xy' },
                     scales: {
                         x: { 
-                            type: xAxisMode === 'grade' ? 'category' : 'linear',
-                            labels: xAxisMode === 'grade' ? gradeLabels.map(g => g.toString()) : undefined,
-                            title: { 
-                                display: true, 
-                                text: xAxisMode === 'grade' ? 'Pay Grade (Non-Exempt 200s followed by Exempt 100s)' : 'Years of Service (Longevity)', 
-                                font: { weight: 'bold', size: 12 } 
-                            },
-                            ticks: { precision: 0 }
+                            type: 'linear', min: xAxisMode === 'grade' ? -0.5 : undefined, max: xAxisMode === 'grade' ? (sortedGradeSequence.length - 0.5) : undefined,
+                            title: { display: true, text: xAxisMode === 'grade' ? 'Pay Grade (Non-Exempt 200s, Exempt 100s)' : 'Longevity (Years of Service)', font: { weight: 'bold', size: 12 }, color: '#475569' },
+                            ticks: { stepSize: 1, callback: (v) => xAxisMode === 'grade' ? (sortedGradeSequence[v] || '') : v }
                         },
                         y: { 
-                            title: { display: true, text: 'Hourly Rate ($)', font: { weight: 'bold', size: 12 } },
-                            ticks: { callback: value => '$' + value }
+                            min: yMin, max: yMax,
+                            title: { display: true, text: 'Hourly Rate ($)', font: { weight: 'bold', size: 12 }, color: '#475569' },
+                            ticks: { 
+                                stepSize: 1, 
+                                callback: (v) => v % 1 === 0 ? '$' + v : '' 
+                            }
                         }
                     },
                     plugins: {
-                        legend: { display: false }, // Legend removed as requested
+                        legend: { display: false },
+                        annotation: { annotations },
+                        zoom: { zoom: { drag: { enabled: true, backgroundColor: 'rgba(0, 75, 141, 0.1)', borderColor: 'rgba(0, 75, 141, 0.4)', borderWidth: 1 }, mode: 'xy' } },
                         tooltip: {
-                            padding: 12,
-                            backgroundColor: 'rgba(15, 23, 42, 0.9)',
+                            padding: 14, backgroundColor: 'rgba(255, 255, 255, 0.98)', titleColor: '#004b8d', titleFont: { weight: 'bold', size: 14 },
+                            bodyColor: '#1e293b', bodyFont: { size: 12 }, borderColor: '#e2e8f0', borderWidth: 1, cornerRadius: 12,
                             callbacks: {
-                                label: (ctx) => {
-                                    const p = ctx.raw;
-                                    return [
-                                        `Name: ${p.name}`,
-                                        `Title: ${p.title}`,
-                                        `Rate: $${p.y.toFixed(2)}`,
-                                        `Grade: ${p.grade}`,
-                                        `Tenure: ${p.tenure.toFixed(1)} yrs`
-                                    ];
-                                }
+                                title: (items) => {
+                                    const p = items[0].raw;
+                                    const contextStr = xAxisMode === 'grade' ? 'Grade ' + p.grade : p.tenure.toFixed(1) + ' Yrs';
+                                    return `${contextStr} - ${formatCurrency(p.y, true)}/hr`;
+                                },
+                                label: (ctx) => `• ${ctx.raw.name}: ${ctx.raw.title} (${ctx.raw.tenure.toFixed(1)} yrs)`
                             }
                         }
                     }
@@ -522,15 +535,9 @@
         window.exportToXLSX = () => {
             if (filteredData.length === 0) return;
             const excelData = filteredData.map(r => ({
-                "ID": r.id,
-                "Last Name": r.last,
-                "First Name": r.first,
-                "Job Title": r.title,
-                "Status": r.status,
-                "Pay Grade": r.grade,
-                "Hourly Rate": r.rate,
-                "Longevity (Yrs)": r.tenure.toFixed(2),
-                "FLSA Status": r.exempt ? "Exempt" : "Non-Exempt"
+                "ID": r.id, "Last Name": r.last, "First Name": r.first, "Job Title": r.title,
+                "Status": r.status, "Pay Grade": r.grade, "Hourly Rate": r.rate,
+                "Longevity (Yrs)": r.tenure.toFixed(2), "FLSA Status": r.exempt ? "Exempt" : "Non-Exempt"
             }));
             const ws = XLSX.utils.json_to_sheet(excelData);
             const wb = XLSX.utils.book_new();
